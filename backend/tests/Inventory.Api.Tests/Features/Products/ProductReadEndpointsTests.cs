@@ -1,0 +1,107 @@
+using System.Net;
+using System.Net.Http.Json;
+using Inventory.Api.Common;
+using Inventory.Api.Features.Categories;
+using Inventory.Api.Features.Products;
+using Inventory.Api.Tests.Infrastructure;
+
+namespace Inventory.Api.Tests.Features.Products;
+
+/// <summary>Tests de solo lectura: trabajan sobre los datos de ejemplo sin modificarlos.</summary>
+public sealed class ProductReadEndpointsTests(InventoryApiFactory factory) : IClassFixture<InventoryApiFactory>
+{
+    private readonly HttpClient _client = factory.CreateClient();
+
+    [Fact]
+    public async Task GetProducts_WithDefaults_ReturnsFirstPageOrderedByName()
+    {
+        var page = await _client.GetFromJsonAsync<PagedResponse<ProductResponse>>("/api/products");
+
+        Assert.NotNull(page);
+        Assert.Equal(8, page.TotalCount);
+        Assert.Equal(1, page.Page);
+        Assert.Equal(ProductQuery.DefaultPageSize, page.PageSize);
+        Assert.Equal(8, page.Items.Count);
+        Assert.Equal(page.Items.Select(p => p.Name).Order(StringComparer.OrdinalIgnoreCase), page.Items.Select(p => p.Name));
+    }
+
+    [Fact]
+    public async Task GetProducts_WithPageSize_PaginatesResults()
+    {
+        var page = await _client.GetFromJsonAsync<PagedResponse<ProductResponse>>("/api/products?page=2&pageSize=3");
+
+        Assert.NotNull(page);
+        Assert.Equal(3, page.Items.Count);
+        Assert.Equal(3, page.TotalPages);
+    }
+
+    [Fact]
+    public async Task GetProducts_WithLowStock_ReturnsOnlyLowStockProducts()
+    {
+        var page = await _client.GetFromJsonAsync<PagedResponse<ProductResponse>>("/api/products?lowStock=true");
+
+        Assert.NotNull(page);
+        Assert.Equal(4, page.TotalCount);
+        Assert.All(page.Items, p => Assert.True(p.IsLowStock));
+    }
+
+    [Fact]
+    public async Task GetProducts_WithSearchAndCategory_CombinesFilters()
+    {
+        var page = await _client.GetFromJsonAsync<PagedResponse<ProductResponse>>("/api/products?search=chair&categoryId=3");
+
+        Assert.NotNull(page);
+        var product = Assert.Single(page.Items);
+        Assert.Equal("FURN-0001", product.Sku);
+        Assert.Equal("Furniture", product.CategoryName);
+    }
+
+    [Theory]
+    [InlineData("pageSize=0")]
+    [InlineData("pageSize=101")]
+    [InlineData("page=0")]
+    [InlineData("sort=color")]
+    public async Task GetProducts_WithInvalidQuery_ReturnsValidationProblem(string queryString)
+    {
+        var response = await _client.GetAsync($"/api/products?{queryString}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
+    public async Task GetProduct_WithExistingId_ReturnsProduct()
+    {
+        var product = await _client.GetFromJsonAsync<ProductResponse>("/api/products/2");
+
+        Assert.NotNull(product);
+        Assert.Equal("ELEC-0002", product.Sku);
+        Assert.True(product.IsLowStock);
+    }
+
+    [Fact]
+    public async Task GetProduct_WithUnknownId_ReturnsNotFound()
+    {
+        var response = await _client.GetAsync("/api/products/999999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCategories_ReturnsCategoriesOrderedByName()
+    {
+        var categories = await _client.GetFromJsonAsync<List<CategoryResponse>>("/api/categories");
+
+        Assert.NotNull(categories);
+        Assert.Equal(["Electronics", "Furniture", "Office"], categories.Select(c => c.Name));
+    }
+
+    [Fact]
+    public async Task Health_ReturnsHealthy()
+    {
+        var response = await _client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
+    }
+}

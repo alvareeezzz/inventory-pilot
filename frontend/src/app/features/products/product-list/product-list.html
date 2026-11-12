@@ -1,0 +1,115 @@
+<section class="page">
+  <header class="page-header">
+    <h1>Productos</h1>
+    <a class="button primary" routerLink="/products/new">Nuevo producto</a>
+  </header>
+
+  <div class="filters" role="search">
+    <label class="field">
+      <span>Buscar</span>
+      <input
+        type="search"
+        placeholder="Nombre o SKU"
+        [value]="searchInput()"
+        (input)="onSearchInput($any($event.target).value)"
+      />
+    </label>
+
+    <label class="field">
+      <span>Categoría</span>
+      <select (change)="onCategoryChange($any($event.target).value)">
+        <option value="" [selected]="categoryId() === null">Todas</option>
+        @for (category of categories.value(); track category.id) {
+          <option [value]="category.id" [selected]="categoryId() === category.id">{{ category.name }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>Ordenar por</span>
+      <select (change)="onSortChange($any($event.target).value)">
+        @for (option of sortOptions; track option.value) {
+          <option [value]="option.value" [selected]="sort() === option.value">{{ option.label }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="checkbox">
+      <input type="checkbox" [checked]="lowStock()" (change)="onLowStockChange($any($event.target).checked)" />
+      <span>Solo stock bajo</span>
+    </label>
+  </div>
+
+  <div class="messages" aria-live="polite">
+    @if (statusMessage()) {
+      <p class="alert success">{{ statusMessage() }}</p>
+    }
+    @if (actionError()) {
+      <p class="alert error" role="alert">{{ actionError() }}</p>
+    }
+  </div>
+
+  @if (loadError(); as error) {
+    <div class="alert error" role="alert">
+      <p>No se han podido cargar los productos: {{ error }}</p>
+      <button type="button" class="button" (click)="products.reload()">Reintentar</button>
+    </div>
+  } @else if (products.hasValue()) {
+    @let result = products.value();
+    @if (result.items.length === 0) {
+      <p class="empty">No hay productos que coincidan con los filtros.</p>
+    } @else {
+      <div class="table-wrapper">
+        <table>
+          <caption class="visually-hidden">Listado de productos</caption>
+          <thead>
+            <tr>
+              <th scope="col">SKU</th>
+              <th scope="col">Nombre</th>
+              <th scope="col">Categoría</th>
+              <th scope="col" class="numeric">Precio</th>
+              <th scope="col" class="numeric">Stock</th>
+              <th scope="col"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (product of result.items; track product.id) {
+              <tr [class.low-stock]="product.isLowStock">
+                <td class="mono">{{ product.sku }}</td>
+                <td>{{ product.name }}</td>
+                <td>{{ product.categoryName }}</td>
+                <td class="numeric">{{ product.price | currency }}</td>
+                <td class="numeric">
+                  {{ product.stock }}
+                  @if (product.isLowStock) {
+                    <span class="badge" title="Stock mínimo: {{ product.minStock }}">Stock bajo</span>
+                  }
+                </td>
+                <td class="actions">
+                  <a class="button" [routerLink]="['/products', product.id, 'edit']" [attr.aria-label]="'Editar ' + product.name">Editar</a>
+                  <button
+                    type="button"
+                    class="button danger"
+                    [disabled]="deletingId() === product.id"
+                    [attr.aria-label]="'Eliminar ' + product.name"
+                    (click)="deleteProduct(product)"
+                  >
+                    {{ deletingId() === product.id ? 'Eliminando…' : 'Eliminar' }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <nav class="pagination" aria-label="Paginación">
+        <button type="button" class="button" [disabled]="page() <= 1" (click)="goToPage(page() - 1)">Anterior</button>
+        <span>Página {{ result.page }} de {{ totalPages() }} · {{ result.totalCount | i18nPlural: productCountLabels }}</span>
+        <button type="button" class="button" [disabled]="page() >= totalPages()" (click)="goToPage(page() + 1)">Siguiente</button>
+      </nav>
+    }
+  } @else {
+    <p class="loading" aria-busy="true">Cargando productos…</p>
+  }
+</section>

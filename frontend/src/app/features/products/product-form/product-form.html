@@ -1,0 +1,72 @@
+<section class="page">
+  <header class="page-header">
+    <h1>{{ isEdit() ? 'Editar producto' : 'Nuevo producto' }}</h1>
+    <a class="button" routerLink="/products">Volver al listado</a>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="alert error" role="alert">{{ errorMessage() }}</p>
+  }
+
+  @if (loading()) {
+    <p class="loading" aria-busy="true">Cargando producto…</p>
+  } @else if (!loadFailed()) {
+    <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="grid">
+        <label class="field">
+          <span>SKU *</span>
+          <input formControlName="sku" autocomplete="off" maxlength="32" [attr.aria-invalid]="!!fieldError('sku')" aria-describedby="sku-error" />
+          <small id="sku-error" class="field-error">{{ fieldError('sku') }}</small>
+        </label>
+
+        <label class="field">
+          <span>Nombre *</span>
+          <input formControlName="name" maxlength="100" [attr.aria-invalid]="!!fieldError('name')" aria-describedby="name-error" />
+          <small id="name-error" class="field-error">{{ fieldError('name') }}</small>
+        </label>
+
+        <label class="field">
+          <span>Categoría *</span>
+          <select formControlName="categoryId" [attr.aria-invalid]="!!fieldError('categoryId')" aria-describedby="category-error">
+            <option [ngValue]="0" disabled>Selecciona una categoría</option>
+            @for (category of categories.value(); track category.id) {
+              <option [ngValue]="category.id">{{ category.name }}</option>
+            }
+          </select>
+          <small id="category-error" class="field-error">{{ fieldError('categoryId') }}</small>
+        </label>
+
+        <label class="field">
+          <span>Precio (€) *</span>
+          <input type="number" formControlName="price" min="0.01" step="0.01" [attr.aria-invalid]="!!fieldError('price')" aria-describedby="price-error" />
+          <small id="price-error" class="field-error">{{ fieldError('price') }}</small>
+        </label>
+
+        <label class="field">
+          <span>Stock *</span>
+          <input type="number" formControlName="stock" min="0" step="1" [attr.aria-invalid]="!!fieldError('stock')" aria-describedby="stock-error" />
+          <small id="stock-error" class="field-error">{{ fieldError('stock') }}</small>
+        </label>
+
+        <label class="field">
+          <span>Stock mínimo *</span>
+          <input type="number" formControlName="minStock" min="0" step="1" [attr.aria-invalid]="!!fieldError('minStock')" aria-describedby="min-stock-error" />
+          <small id="min-stock-error" class="field-error">{{ fieldError('minStock') }}</small>
+        </label>
+
+        <label class="field full">
+          <span>Descripción</span>
+          <textarea formControlName="description" rows="3" maxlength="500" [attr.aria-invalid]="!!fieldError('description')" aria-describedby="description-error"></textarea>
+          <small id="description-error" class="field-error">{{ fieldError('description') }}</small>
+        </label>
+      </div>
+
+      <div class="form-actions">
+        <a class="button" routerLink="/products">Cancelar</a>
+        <button type="submit" class="button primary" [disabled]="saving()">
+          {{ saving() ? 'Guardando…' : isEdit() ? 'Guardar cambios' : 'Crear producto' }}
+        </button>
+      </div>
+    </form>
+  }
+</section>
