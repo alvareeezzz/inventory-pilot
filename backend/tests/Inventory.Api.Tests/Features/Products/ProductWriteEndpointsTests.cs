@@ -3,6 +3,9 @@ using System.Net.Http.Json;
 using Inventory.Api.Features.Products;
 using Inventory.Api.Tests.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Inventory.Api.Tests.Features.Products;
 
@@ -45,6 +48,69 @@ public sealed class ProductWriteEndpointsTests(InventoryApiFactory factory) : IC
         Assert.Contains("price", fields);
         Assert.Contains("stock", fields);
     }
+
+    [Fact]
+    public async Task CreateProduct_WithInvalidData_ReturnsSpanishMessages()
+    {
+        var request = NewRequest(sku: "bad sku!") with
+        {
+            Name = "",
+            Description = new string('x', 501),
+            CategoryId = 0,
+            Price = 99_999_999m,
+            Stock = -1,
+            MinStock = 2_000_000,
+        };
+
+        var response = await _client.PostAsJsonAsync("/api/products", request);
+
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.NotNull(problem);
+        var errors = problem.Errors.ToDictionary(e => e.Key.ToLowerInvariant(), e => e.Value[0]);
+        Assert.Equal("El SKU solo puede contener letras, números y guiones.", errors["sku"]);
+        Assert.Equal("El nombre es obligatorio.", errors["name"]);
+        Assert.Equal("La descripción no puede superar los 500 caracteres.", errors["description"]);
+        Assert.Equal("Selecciona una categoría.", errors["categoryid"]);
+        Assert.Equal("El precio debe estar entre 0,01 y 1.000.000.", errors["price"]);
+        Assert.Equal("El stock debe ser un número entero entre 0 y 1.000.000.", errors["stock"]);
+        Assert.Equal("El stock mínimo debe ser un número entero entre 0 y 1.000.000.", errors["minstock"]);
+    }
+
+    [Theory]
+    [InlineData("{bad")] // JSON mal formado
+    [InlineData("""{"sku":"TEST-BODY-1","name":"x","categoryId":1,"price":10,"stock":1.5,"minStock":0}""")] // decimal en un entero
+    [InlineData("""{"sku":"TEST-BODY-2","name":"x","categoryId":1,"price":10,"stock":2147483648,"minStock":0}""")] // desborda Int32
+    [InlineData("""{"sku":"TEST-BODY-3","name":"x","categoryId":1,"price":"abc","stock":1,"minStock":0}""")] // tipo incorrecto
+    public async Task CreateProduct_WithUnreadableBody_ReturnsBadRequestProblem(string body)
+    {
+        using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
+
+        var response = await CreateClientThatThrowsOnBadRequest().PostAsync("/api/products", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal((int)HttpStatusCode.BadRequest, problem?.Status);
+    }
+
+    [Fact]
+    public async Task UpdateProduct_WithUnreadableBody_ReturnsBadRequest()
+    {
+        using var content = new StringContent("{bad", System.Text.Encoding.UTF8, "application/json");
+
+        var response = await CreateClientThatThrowsOnBadRequest().PutAsync("/api/products/1", content);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    /// Cliente con ThrowOnBadRequest activado, como en Development: el cuerpo ilegible llega al
+    /// manejador global de excepciones como BadHttpRequestException en lugar de resolverse con un 400 directo.
+    /// </summary>
+    private HttpClient CreateClientThatThrowsOnBadRequest() =>
+        factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.Configure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true)))
+        .CreateClient();
 
     [Fact]
     public async Task CreateProduct_WithUnknownCategory_ReturnsValidationProblem()

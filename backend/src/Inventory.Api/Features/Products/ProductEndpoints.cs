@@ -1,4 +1,4 @@
-using Inventory.Api.Common;
+﻿using Inventory.Api.Common;
 using Inventory.Api.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +14,13 @@ public static class ProductEndpoints
         var group = api.MapGroup("/products").WithTags("Products");
 
         group.MapGet("/", GetProductsAsync).WithName("GetProducts");
-        group.MapGet("/{id:int}", GetProductAsync).WithName("GetProduct");
+        group.MapGet("/{id:int}", GetProductAsync).WithName("GetProduct")
+            .ProducesProblem(StatusCodes.Status404NotFound);
         group.MapPost("/", CreateProductAsync).WithName("CreateProduct");
-        group.MapPut("/{id:int}", UpdateProductAsync).WithName("UpdateProduct");
-        group.MapDelete("/{id:int}", DeleteProductAsync).WithName("DeleteProduct");
+        group.MapPut("/{id:int}", UpdateProductAsync).WithName("UpdateProduct")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapDelete("/{id:int}", DeleteProductAsync).WithName("DeleteProduct")
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         return api;
     }
@@ -42,13 +45,13 @@ public static class ProductEndpoints
         return TypedResults.Ok(new PagedResponse<ProductResponse>(items, page, pageSize, totalCount));
     }
 
-    private static async Task<Results<Ok<ProductResponse>, NotFound>> GetProductAsync(
+    private static async Task<Results<Ok<ProductResponse>, ProblemHttpResult>> GetProductAsync(
         int id,
         InventoryDbContext db,
         CancellationToken ct)
     {
         var product = await FindResponseAsync(db, id, ct);
-        return product is null ? TypedResults.NotFound() : TypedResults.Ok(product);
+        return product is null ? ProductNotFound(id) : TypedResults.Ok(product);
     }
 
     private static async Task<Results<CreatedAtRoute<ProductResponse>, ValidationProblem, Conflict<ProblemDetails>>> CreateProductAsync(
@@ -91,7 +94,7 @@ public static class ProductEndpoints
         return TypedResults.CreatedAtRoute(response, "GetProduct", new { id = product.Id });
     }
 
-    private static async Task<Results<Ok<ProductResponse>, NotFound, ValidationProblem, Conflict<ProblemDetails>>> UpdateProductAsync(
+    private static async Task<Results<Ok<ProductResponse>, ProblemHttpResult, ValidationProblem, Conflict<ProblemDetails>>> UpdateProductAsync(
         int id,
         ProductRequest request,
         InventoryDbContext db,
@@ -101,7 +104,7 @@ public static class ProductEndpoints
         var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null)
         {
-            return TypedResults.NotFound();
+            return ProductNotFound(id);
         }
 
         var sku = NormalizeSku(request.Sku);
@@ -133,13 +136,13 @@ public static class ProductEndpoints
         return TypedResults.Ok((await FindResponseAsync(db, id, ct))!);
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteProductAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteProductAsync(
         int id,
         InventoryDbContext db,
         CancellationToken ct)
     {
         var deleted = await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
-        return deleted == 0 ? TypedResults.NotFound() : TypedResults.NoContent();
+        return deleted == 0 ? ProductNotFound(id) : TypedResults.NoContent();
     }
 
     private static Task<ProductResponse?> FindResponseAsync(InventoryDbContext db, int id, CancellationToken ct) =>
@@ -173,6 +176,13 @@ public static class ProductEndpoints
         {
             [nameof(ProductRequest.CategoryId)] = [$"La categoría {categoryId} no existe."],
         });
+
+    // TypedResults.Problem (y no NotFound(value)) para responder con application/problem+json.
+    private static ProblemHttpResult ProductNotFound(int id) =>
+        TypedResults.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Producto no encontrado",
+            detail: $"No existe ningún producto con el id {id}.");
 
     private static Conflict<ProblemDetails> DuplicateSku(string sku) =>
         TypedResults.Conflict(new ProblemDetails

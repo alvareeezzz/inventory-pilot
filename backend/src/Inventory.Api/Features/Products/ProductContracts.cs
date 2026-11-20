@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Inventory.Api.Features.Products;
 
@@ -19,29 +19,31 @@ public sealed record ProductResponse(
 /// <summary>Datos para crear o actualizar un producto.</summary>
 public sealed record ProductRequest
 {
-    [Required]
-    [StringLength(32)]
+    // Mensajes en español: se muestran tal cual en el formulario del frontend.
+    [Required(ErrorMessage = "El SKU es obligatorio.")]
+    [StringLength(32, ErrorMessage = "El SKU no puede superar los 32 caracteres.")]
     // Se admiten espacios alrededor porque el SKU se recorta y pasa a mayúsculas al guardarlo.
-    [RegularExpression(@"^\s*[A-Za-z0-9-]+\s*$", ErrorMessage = "The SKU may only contain letters, digits and hyphens.")]
+    [RegularExpression(@"^\s*[A-Za-z0-9-]+\s*$", ErrorMessage = "El SKU solo puede contener letras, números y guiones.")]
     public string Sku { get; init; } = string.Empty;
 
-    [Required]
-    [StringLength(100)]
+    [Required(ErrorMessage = "El nombre es obligatorio.")]
+    [StringLength(100, ErrorMessage = "El nombre no puede superar los 100 caracteres.")]
     public string Name { get; init; } = string.Empty;
 
-    [StringLength(500)]
+    [StringLength(500, ErrorMessage = "La descripción no puede superar los 500 caracteres.")]
     public string? Description { get; init; }
 
-    [Range(1, int.MaxValue)]
+    [Range(1, int.MaxValue, ErrorMessage = "Selecciona una categoría.")]
     public int CategoryId { get; init; }
 
-    [Range(typeof(decimal), "0.01", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true)]
+    [Range(typeof(decimal), "0.01", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
+        ErrorMessage = "El precio debe estar entre 0,01 y 1.000.000.")]
     public decimal Price { get; init; }
 
-    [Range(0, 1_000_000)]
+    [Range(0, 1_000_000, ErrorMessage = "El stock debe ser un número entero entre 0 y 1.000.000.")]
     public int Stock { get; init; }
 
-    [Range(0, 1_000_000)]
+    [Range(0, 1_000_000, ErrorMessage = "El stock mínimo debe ser un número entero entre 0 y 1.000.000.")]
     public int MinStock { get; init; }
 }
 
@@ -52,17 +54,17 @@ public sealed class ProductQuery
     public const int MaxPageSize = 100;
 
     // Nullable: con [AsParameters] un int no anulable se considera obligatorio en la query string.
-    [Range(1, int.MaxValue)]
+    [Range(1, int.MaxValue, ErrorMessage = "La página debe ser mayor o igual que 1.")]
     public int? Page { get; init; }
 
-    [Range(1, MaxPageSize)]
+    [Range(1, MaxPageSize, ErrorMessage = "El tamaño de página debe estar entre 1 y 100.")]
     public int? PageSize { get; init; }
 
     public int PageOrDefault => Page ?? 1;
 
     public int PageSizeOrDefault => PageSize ?? DefaultPageSize;
 
-    [StringLength(100)]
+    [StringLength(100, ErrorMessage = "La búsqueda no puede superar los 100 caracteres.")]
     public string? Search { get; init; }
 
     public int? CategoryId { get; init; }
@@ -70,6 +72,6 @@ public sealed class ProductQuery
     public bool? LowStock { get; init; }
 
     /// <summary>Campo de orden; con prefijo "-" es descendente.</summary>
-    [RegularExpression("^-?(name|sku|price|stock)$", ErrorMessage = "Sort must be one of: name, sku, price, stock (prefix with '-' for descending).")]
+    [RegularExpression("^-?(name|sku|price|stock)$", ErrorMessage = "El orden debe ser name, sku, price o stock (con el prefijo '-' para orden descendente).")]
     public string? Sort { get; init; }
 }
