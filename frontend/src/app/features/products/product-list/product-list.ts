@@ -1,27 +1,29 @@
-import { CurrencyPipe, I18nPluralPipe, Location } from '@angular/common';
+import { CurrencyPipe, DecimalPipe, I18nPluralPipe, Location } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   afterNextRender,
   computed,
   inject,
+  linkedSignal,
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { debounceTime, distinctUntilChanged, finalize, map } from 'rxjs';
 import { describeHttpError } from '../../../core/http/problem-details';
-import { Product, ProductFilters, ProductSort } from '../data/product.models';
+import { PagedResponse, Product, ProductFilters, ProductSort } from '../data/product.models';
 import { ProductsApi } from '../data/products-api';
 
-export const PRODUCT_LIST_PAGE_SIZE = 10;
+const PAGE_SIZE = 10;
 const SEARCH_DEBOUNCE_MS = 300;
 
 @Component({
   selector: 'app-product-list',
-  imports: [RouterLink, CurrencyPipe, I18nPluralPipe],
+  imports: [RouterLink, CurrencyPipe, DecimalPipe, I18nPluralPipe],
   templateUrl: './product-list.html',
   styleUrl: './product-list.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,6 +31,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 export class ProductList {
   private readonly api = inject(ProductsApi);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   protected readonly productCountLabels = { '=1': '# producto', other: '# productos' };
 
@@ -60,7 +63,7 @@ export class ProductList {
 
   private readonly filters = computed<ProductFilters>(() => ({
     page: this.page(),
-    pageSize: PRODUCT_LIST_PAGE_SIZE,
+    pageSize: PAGE_SIZE,
     search: this.search(),
     categoryId: this.categoryId(),
     lowStock: this.lowStock(),
@@ -68,11 +71,20 @@ export class ProductList {
   }));
 
   protected readonly products = this.api.productsResource(this.filters);
-  protected readonly categories = this.api.categoriesResource();
+  protected readonly categoryList = this.api.categoryList;
+  protected readonly categoriesFailed = this.api.categoriesFailed;
 
-  protected readonly totalPages = computed(() =>
-    this.products.hasValue() ? this.products.value().totalPages : 0,
-  );
+  /**
+   * Último resultado recibido. Al cambiar de página o de filtro el recurso pasa a 'loading' y su
+   * valor queda undefined; se sigue mostrando el anterior (marcado como ocupado) para que la tabla
+   * no desaparezca ni salte el contenido mientras llega el nuevo.
+   */
+  protected readonly result = linkedSignal<PagedResponse<Product> | undefined, PagedResponse<Product> | undefined>({
+    source: () => (this.products.hasValue() ? this.products.value() : undefined),
+    computation: (value, previous) => value ?? previous?.value,
+  });
+
+  protected readonly totalPages = computed(() => this.result()?.totalPages ?? 0);
 
   protected readonly loadError = computed(() => {
     const error = this.products.error();
@@ -84,6 +96,9 @@ export class ProductList {
   protected readonly deletingId = signal<number | null>(null);
 
   constructor() {
+    // Carga las categorías compartidas (o las reintenta si la carga anterior falló).
+    this.api.loadCategories();
+
     const message: string = inject(Router).currentNavigation()?.extras.state?.['message'] ?? '';
     if (message) {
       const location = inject(Location);
@@ -98,7 +113,6 @@ export class ProductList {
       });
     }
   }
-
 
   protected onSearchInput(value: string): void {
     this.searchInput.set(value);
@@ -123,6 +137,18 @@ export class ProductList {
   protected goToPage(page: number): void {
     if (page >= 1 && page <= this.totalPages()) {
       this.page.set(page);
+      this.scrollListIntoView();
+    }
+  }
+
+  /**
+   * Al pasar de página desde el final de la lista (habitual en móvil), lleva la vista al principio del
+   * listado para empezar a leer la página nueva. Si el principio ya se ve, no se mueve nada.
+   */
+  private scrollListIntoView(): void {
+    const list = this.host.nativeElement.querySelector('.table-wrapper');
+    if (list && list.getBoundingClientRect().top < 0) {
+      list.scrollIntoView({ block: 'start' });
     }
   }
 
@@ -144,7 +170,7 @@ export class ProductList {
       .subscribe({
         next: () => {
           this.statusMessage.set(`Producto ${product.sku} eliminado.`);
-          const wasLastItemOfPage = this.products.hasValue() && this.products.value().items.length === 1;
+          const wasLastItemOfPage = this.result()?.items.length === 1;
           if (wasLastItemOfPage && this.page() > 1) {
             this.page.update((page) => page - 1);
           } else {

@@ -189,6 +189,20 @@ describe('ProductForm', () => {
     expect(element.querySelector('form')).toBeNull();
   });
 
+  it('si fallan las categorías muestra el formulario con un aviso en el campo', async () => {
+    fixture = TestBed.createComponent(ProductForm);
+    element = fixture.nativeElement;
+    fixture.detectChanges();
+    TestBed.tick();
+    httpMock.expectOne('/api/categories').flush(null, { status: 500, statusText: 'Server Error' });
+    await render();
+
+    expect(element.querySelector('form')).not.toBeNull();
+    expect(element.textContent).toContain('No se han podido cargar las categorías.');
+    // Solo queda la opción "Selecciona una categoría".
+    expect((element.querySelector('[formControlName="categoryId"]') as HTMLSelectElement).options.length).toBe(1);
+  });
+
   it('muestra los límites numéricos con formato español', async () => {
     await create();
 

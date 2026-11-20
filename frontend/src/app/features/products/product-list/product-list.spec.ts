@@ -58,6 +58,70 @@ describe('ProductList', () => {
     expect(element.querySelector('.pagination')?.textContent).toContain('Página 1 de 1 · 2 productos');
   });
 
+  describe('paginación', () => {
+    const pageButton = (label: string) =>
+      Array.from(element.querySelectorAll<HTMLButtonElement>('.pagination button')).find((b) =>
+        b.textContent?.includes(label),
+      )!;
+
+    async function showTwoPages(): Promise<void> {
+      // Recarga con un resultado de 2 páginas (cambiando el orden para lanzar una petición nueva).
+      const select = element.querySelectorAll('select')[1] as HTMLSelectElement;
+      select.value = 'sku';
+      select.dispatchEvent(new Event('change'));
+      expectProductsRequest().flush(buildPage([buildProduct()], { totalCount: 11, totalPages: 2 }));
+      await render();
+    }
+
+    it('mantiene visible la página actual mientras carga la siguiente', async () => {
+      await showTwoPages();
+
+      pageButton('Siguiente').click();
+      const pending = expectProductsRequest();
+      // Sin whenStable: la petición sigue pendiente a propósito.
+      TestBed.tick();
+
+      expect(pending.request.params.get('page')).toBe('2');
+      expect(element.querySelectorAll('tbody tr').length).toBe(1);
+      expect(element.querySelector('.loading')).toBeNull();
+      expect(element.querySelector('.table-wrapper')?.getAttribute('aria-busy')).toBe('true');
+
+      pending.flush(buildPage([lowStockProduct], { page: 2, totalCount: 11, totalPages: 2 }));
+      await render();
+      expect(element.querySelector('tbody tr')?.textContent).toContain('Keyboard');
+      expect(element.querySelector('.table-wrapper')?.getAttribute('aria-busy')).toBe('false');
+    });
+
+    it('deshabilita Anterior en la primera página y Siguiente en la última', async () => {
+      await showTwoPages();
+      expect(pageButton('Anterior').disabled).toBe(true);
+      expect(pageButton('Siguiente').disabled).toBe(false);
+
+      pageButton('Siguiente').click();
+      expectProductsRequest().flush(buildPage([lowStockProduct], { page: 2, totalCount: 11, totalPages: 2 }));
+      await render();
+
+      expect(pageButton('Anterior').disabled).toBe(false);
+      expect(pageButton('Siguiente').disabled).toBe(true);
+    });
+
+    it('al borrar el único producto de la página 2 vuelve a la página 1', async () => {
+      await showTwoPages();
+      pageButton('Siguiente').click();
+      expectProductsRequest().flush(buildPage([lowStockProduct], { page: 2, totalCount: 11, totalPages: 2 }));
+      await render();
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      (element.querySelector('button.danger') as HTMLButtonElement).click();
+      httpMock.expectOne('/api/products/2').flush(null, { status: 204, statusText: 'No Content' });
+
+      const next = expectProductsRequest();
+      expect(next.request.params.get('page')).toBe('1');
+      next.flush(buildPage([buildProduct()], { totalCount: 10, totalPages: 1 }));
+      await render();
+    });
+  });
+
   it('usa el singular cuando solo hay un producto', async () => {
     const checkbox = element.querySelector('input[type="checkbox"]') as HTMLInputElement;
     checkbox.checked = true;
@@ -195,5 +259,43 @@ describe('ProductList · aviso tras guardar', () => {
     const state = TestBed.inject(Location).getState() as Record<string, unknown> | null;
     expect(state?.['message']).toBeUndefined();
     httpMock.verify();
+  });
+});
+
+describe('ProductList · datos especiales', () => {
+  function setup(): { fixture: ComponentFixture<ProductList>; httpMock: HttpTestingController } {
+    TestBed.configureTestingModule({
+      imports: [ProductList],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([]), provideSpanishLocale()],
+    });
+    const fixture = TestBed.createComponent(ProductList);
+    TestBed.tick();
+    return { fixture, httpMock: TestBed.inject(HttpTestingController) };
+  }
+
+  it('si fallan las categorías muestra los productos y un aviso, sin bloquear la página', async () => {
+    const { fixture, httpMock } = setup();
+    httpMock.expectOne('/api/categories').flush(null, { status: 500, statusText: 'Server Error' });
+    httpMock.expectOne((req) => req.url === '/api/products').flush(buildPage([buildProduct()]));
+    TestBed.tick();
+    await fixture.whenStable();
+    const element: HTMLElement = fixture.nativeElement;
+
+    expect(element.querySelectorAll('tbody tr').length).toBe(1);
+    expect(element.querySelector('.loading')).toBeNull();
+    expect(element.textContent).toContain('No se han podido cargar las categorías.');
+    // Solo queda la opción "Todas" en el filtro.
+    expect(element.querySelectorAll('select')[0].options.length).toBe(1);
+  });
+
+  it('muestra el stock con separador de miles, como el precio', async () => {
+    const { fixture, httpMock } = setup();
+    httpMock.expectOne('/api/categories').flush(categories);
+    httpMock.expectOne((req) => req.url === '/api/products').flush(buildPage([buildProduct({ stock: 1_000_000 })]));
+    TestBed.tick();
+    await fixture.whenStable();
+
+    const stockCell = (fixture.nativeElement as HTMLElement).querySelector('td[data-label="Stock"]');
+    expect(stockCell?.textContent).toContain('1.000.000');
   });
 });

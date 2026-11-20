@@ -66,6 +66,7 @@ cd frontend && npm run e2e
 | `e2e/responsive-layout.e2e.ts` | De 800 a 1280 px, con un nombre largo, la tabla cabe sin scroll interno y las acciones se ven |
 | `e2e/status-message.e2e.ts` | El aviso de producto creado no reaparece al recargar la página |
 | `e2e/delete-missing-product.e2e.ts` | Eliminar un producto que ya no existe muestra el aviso y lo quita del listado |
+| `e2e/validation-limits.e2e.ts` | La API y el formulario aplican los mismos límites (longitudes de texto e importe máximo) |
 
 ## Estructura
 

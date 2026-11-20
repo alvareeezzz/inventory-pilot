@@ -19,10 +19,13 @@
       <span>Categoría</span>
       <select (change)="onCategoryChange($any($event.target).value)">
         <option value="" [selected]="categoryId() === null">Todas</option>
-        @for (category of categories.value(); track category.id) {
+        @for (category of categoryList(); track category.id) {
           <option [value]="category.id" [selected]="categoryId() === category.id">{{ category.name }}</option>
         }
       </select>
+      @if (categoriesFailed()) {
+        <small class="field-error" role="alert">No se han podido cargar las categorías.</small>
+      }
     </label>
 
     <label class="field">
@@ -54,12 +57,11 @@
       <p>No se han podido cargar los productos: {{ error }}</p>
       <button type="button" class="button" (click)="products.reload()">Reintentar</button>
     </div>
-  } @else if (products.hasValue()) {
-    @let result = products.value();
+  } @else if (result(); as result) {
     @if (result.items.length === 0) {
       <p class="empty">No hay productos que coincidan con los filtros.</p>
     } @else {
-      <div class="table-wrapper">
+      <div class="table-wrapper" [attr.aria-busy]="products.isLoading()">
         <!--
           Los roles explícitos conservan la semántica de tabla cuando en móvil las filas
           se muestran como tarjetas (display: grid/block anula los roles implícitos).
@@ -84,7 +86,7 @@
                 <td role="cell" data-label="Categoría">{{ product.categoryName }}</td>
                 <td role="cell" class="numeric" data-label="Precio">{{ product.price | currency }}</td>
                 <td role="cell" class="numeric" data-label="Stock">
-                  {{ product.stock }}
+                  {{ product.stock | number }}
                   @if (product.isLowStock) {
                     <span class="badge" title="Stock mínimo: {{ product.minStock }}">Stock bajo</span>
                   }

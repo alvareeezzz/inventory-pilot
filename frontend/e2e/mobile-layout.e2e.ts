@@ -92,9 +92,10 @@ test.describe('paginación en móvil', () => {
   const products: TestProduct[] = [];
 
   test.beforeAll(async ({ request }) => {
-    // 11 productos propios: con 10 por página hay dos páginas al buscar por el prefijo.
-    for (let i = 0; i < 11; i++) {
-      products.push(await createProduct(request, `${prefix}-${i}`, { name: `${prefix} producto ${i}` }));
+    // 20 productos propios: con 10 por página hay dos páginas llenas al buscar por el prefijo.
+    for (let i = 0; i < 20; i++) {
+      const n = String(i).padStart(2, '0');
+      products.push(await createProduct(request, `${prefix}-${n}`, { name: `${prefix} producto ${n}` }));
     }
   });
 
@@ -107,7 +108,7 @@ test.describe('paginación en móvil', () => {
     await page.getByRole('searchbox', { name: 'Buscar' }).fill(prefix);
     const pager = page.getByRole('navigation', { name: 'Paginación' });
     await expect(pager).toContainText('Página 1 de 2');
-    await expect(pager).toContainText('11 productos');
+    await expect(pager).toContainText('20 productos');
 
     const nav = await pager.boundingBox();
     const info = await pager.locator('.page-info').boundingBox();
@@ -116,5 +117,18 @@ test.describe('paginación en móvil', () => {
     expect(info!.height).toBeLessThanOrEqual(56);
     await pager.scrollIntoViewIfNeeded();
     await expect(pager.getByRole('button', { name: 'Siguiente' })).toBeInViewport();
+  });
+
+  test('al pasar de página lleva la vista al principio del listado', async ({ page }) => {
+    await page.goto('/products');
+    await page.getByRole('searchbox', { name: 'Buscar' }).fill(prefix);
+    const pager = page.getByRole('navigation', { name: 'Paginación' });
+    await expect(pager).toContainText('Página 1 de 2');
+
+    await pager.getByRole('button', { name: 'Siguiente' }).click();
+
+    await expect(pager).toContainText('Página 2 de 2');
+    // El primer producto de la página nueva queda a la vista (no el final de la lista).
+    await expect(page.locator('tbody tr').first()).toBeInViewport();
   });
 });

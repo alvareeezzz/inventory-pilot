@@ -15,13 +15,13 @@
       <div class="grid">
         <label class="field">
           <span>SKU *</span>
-          <input formControlName="sku" autocomplete="off" maxlength="32" [attr.aria-invalid]="!!fieldError('sku')" aria-describedby="sku-error" />
+          <input formControlName="sku" autocomplete="off" [maxlength]="rules.skuMaxLength" [attr.aria-invalid]="!!fieldError('sku')" aria-describedby="sku-error" />
           <small id="sku-error" class="field-error">{{ fieldError('sku') }}</small>
         </label>
 
         <label class="field">
           <span>Nombre *</span>
-          <input formControlName="name" maxlength="100" [attr.aria-invalid]="!!fieldError('name')" aria-describedby="name-error" />
+          <input formControlName="name" [maxlength]="rules.nameMaxLength" [attr.aria-invalid]="!!fieldError('name')" aria-describedby="name-error" />
           <small id="name-error" class="field-error">{{ fieldError('name') }}</small>
         </label>
 
@@ -29,16 +29,19 @@
           <span>Categoría *</span>
           <select formControlName="categoryId" [attr.aria-invalid]="!!fieldError('categoryId')" aria-describedby="category-error">
             <option [ngValue]="0" disabled>Selecciona una categoría</option>
-            @for (category of categories.value(); track category.id) {
+            @for (category of categoryList(); track category.id) {
               <option [ngValue]="category.id">{{ category.name }}</option>
             }
           </select>
+          @if (categoriesFailed()) {
+            <small class="field-error" role="alert">No se han podido cargar las categorías. Vuelve a intentarlo más tarde.</small>
+          }
           <small id="category-error" class="field-error">{{ fieldError('categoryId') }}</small>
         </label>
 
         <label class="field">
           <span>Precio (€) *</span>
-          <input type="number" formControlName="price" min="0.01" step="0.01" [attr.aria-invalid]="!!fieldError('price')" aria-describedby="price-error" />
+          <input type="number" formControlName="price" [min]="rules.minPrice" step="0.01" [attr.aria-invalid]="!!fieldError('price')" aria-describedby="price-error" />
           <small id="price-error" class="field-error">{{ fieldError('price') }}</small>
         </label>
 
@@ -56,7 +59,7 @@
 
         <label class="field full">
           <span>Descripción</span>
-          <textarea formControlName="description" rows="3" maxlength="500" [attr.aria-invalid]="!!fieldError('description')" aria-describedby="description-error"></textarea>
+          <textarea formControlName="description" rows="3" [maxlength]="rules.descriptionMaxLength" [attr.aria-invalid]="!!fieldError('description')" aria-describedby="description-error"></textarea>
           <small id="description-error" class="field-error">{{ fieldError('description') }}</small>
         </label>
       </div>

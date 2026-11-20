@@ -177,9 +177,20 @@ input[type='checkbox'] {
   position: absolute;
   width: 1px;
   height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* Mensajes de carga y de listado vacío (comunes a varias pantallas). */
+.empty,
+.loading {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-muted);
 }
 
 /* Pantallas pequeñas o táctiles: objetivos de al menos 44 px de alto (WCAG 2.5.5). */

@@ -19,6 +19,12 @@
   border-radius: var(--radius);
 }
 
+/* Mientras llega la página o el filtro nuevo se mantiene la anterior, atenuada. */
+.table-wrapper[aria-busy='true'] {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -89,13 +95,6 @@ tr.low-stock {
   margin-top: 1rem;
 }
 
-.empty,
-.loading {
-  padding: 2rem;
-  text-align: center;
-  color: var(--text-muted);
-}
-
 /*
  * Móvil y tablet: filtros en dos columnas y cada producto como una tarjeta sin scroll horizontal.
  * Por debajo de 56rem las seis columnas no caben en la tabla.
@@ -132,11 +131,15 @@ tr.low-stock {
     display: block;
   }
 
-  /* La cabecera se oculta visualmente pero sigue disponible para lectores de pantalla. */
+  /* La cabecera se oculta visualmente pero sigue disponible para lectores de pantalla
+     (mismas reglas que .visually-hidden en styles.css, solo en este ancho). */
   thead {
     position: absolute;
     width: 1px;
     height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
