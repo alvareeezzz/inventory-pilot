@@ -23,6 +23,15 @@ describe('problem-details', () => {
     expect(describeHttpError(new HttpErrorResponse({ status: 0 }))).toContain('No se puede conectar');
   });
 
+  it('no presenta como error del servidor un 4xx sin ProblemDetails', () => {
+    expect(describeHttpError(new HttpErrorResponse({ status: 400, error: '{trunc' }))).toBe(
+      'La petición no es válida.',
+    );
+    expect(describeHttpError(new HttpErrorResponse({ status: 404, error: null }))).toBe(
+      'No se ha podido completar la petición (404).',
+    );
+  });
+
   it('usa un mensaje genérico para errores sin ProblemDetails', () => {
     expect(describeHttpError(new HttpErrorResponse({ status: 502, error: 'Bad gateway' }))).toBe(
       'Error del servidor (502).',

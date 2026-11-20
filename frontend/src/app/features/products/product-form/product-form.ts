@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   LOCALE_ID,
   OnInit,
   computed,
@@ -21,6 +22,9 @@ import { ProductsApi } from '../data/products-api';
 
 const MAX_AMOUNT = 1_000_000;
 const INTEGER = /^\d+$/;
+/** Id de ruta válido: entero positivo sin signo, decimales ni notación científica. */
+const PRODUCT_ID = /^[1-9]\d*$/;
+const NOT_FOUND_MESSAGE = 'El producto no existe o ha sido eliminado.';
 
 /** Mismas reglas que valida la API (ProductRequest). */
 const SKU_PATTERN = /^\s*[A-Za-z0-9-]+\s*$/;
@@ -39,6 +43,7 @@ export class ProductForm implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly locale = inject(LOCALE_ID);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** Parámetro de ruta ":id" (solo en edición). */
   readonly id = input<string>();
@@ -67,6 +72,13 @@ export class ProductForm implements OnInit {
       return;
     }
 
+    // Un id no numérico (/products/abc/edit) no puede existir: se avisa sin llamar a la API.
+    if (!PRODUCT_ID.test(id)) {
+      this.loadFailed.set(true);
+      this.errorMessage.set(NOT_FOUND_MESSAGE);
+      return;
+    }
+
     this.loading.set(true);
     this.api
       .getProduct(Number(id))
@@ -80,7 +92,7 @@ export class ProductForm implements OnInit {
           this.loadFailed.set(true);
           this.errorMessage.set(
             error instanceof HttpErrorResponse && error.status === 404
-              ? 'El producto no existe o ha sido eliminado.'
+              ? NOT_FOUND_MESSAGE
               : describeHttpError(error),
           );
         },
@@ -90,6 +102,7 @@ export class ProductForm implements OnInit {
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.focusFirstInvalidField();
       return;
     }
 
@@ -159,6 +172,7 @@ export class ProductForm implements OnInit {
     if (status === 409) {
       this.form.controls.sku.setErrors({ duplicate: true });
       this.form.controls.sku.markAsTouched();
+      this.focusFirstInvalidField();
       return;
     }
 
@@ -174,11 +188,21 @@ export class ProductForm implements OnInit {
         }
       }
       if (mapped) {
+        this.focusFirstInvalidField();
         return;
       }
     }
 
     this.errorMessage.set(describeHttpError(error));
+  }
+
+  /** Lleva el foco al primer campo con error, en el orden en que aparecen en pantalla. */
+  private focusFirstInvalidField(): void {
+    const fields = this.host.nativeElement.querySelectorAll<HTMLElement>('[formControlName]');
+    const firstInvalid = Array.from(fields).find(
+      (field) => this.form.get(field.getAttribute('formControlName') ?? '')?.invalid,
+    );
+    firstInvalid?.focus();
   }
 
   private findControl(field: string): AbstractControl | null {

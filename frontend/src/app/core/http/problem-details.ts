@@ -24,5 +24,16 @@ export function describeHttpError(error: unknown): string {
     return 'No se puede conectar con el servidor. Comprueba que la API está arrancada.';
   }
   const problem = getProblemDetails(error);
-  return problem?.detail ?? problem?.title ?? `Error del servidor (${error.status}).`;
+  const message = problem?.detail ?? problem?.title;
+  if (message) {
+    return message;
+  }
+  // Sin ProblemDetails legible: un 4xx es un problema de la petición, no un fallo del servidor.
+  if (error.status === 400) {
+    return 'La petición no es válida.';
+  }
+  if (error.status < 500) {
+    return `No se ha podido completar la petición (${error.status}).`;
+  }
+  return `Error del servidor (${error.status}).`;
 }

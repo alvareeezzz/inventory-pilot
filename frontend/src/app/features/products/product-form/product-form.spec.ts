@@ -77,6 +77,18 @@ describe('ProductForm', () => {
     expect(element.querySelector('#price-error')?.textContent).toContain('El valor mínimo es 0,01.');
   });
 
+  it('al enviar con errores lleva el foco al primer campo inválido', async () => {
+    await create();
+    type('[formControlName="sku"]', 'ELEC-0100');
+    type('[formControlName="name"]', 'Webcam');
+
+    submit();
+    await render();
+
+    // SKU y nombre son válidos: el primero con error es la categoría.
+    expect(document.activeElement).toBe(element.querySelector('[formControlName="categoryId"]'));
+  });
+
   it('valida el formato del SKU y que el stock sea entero', async () => {
     await create();
 
@@ -167,6 +179,14 @@ describe('ProductForm', () => {
     // Sin producto que editar no debe ofrecerse un formulario vacío para "guardar".
     expect(element.querySelector('form')).toBeNull();
     expect(element.querySelector('a[routerLink="/products"]')?.textContent).toContain('Volver al listado');
+  });
+
+  it.each(['abc', '0', '-3', '2.5', '1e3'])('con un id no válido ("%s") avisa sin llamar a la API', async (id) => {
+    await create(id);
+
+    httpMock.expectNone((req) => req.url.startsWith('/api/products'));
+    expect(element.querySelector('.alert.error')?.textContent).toContain('El producto no existe');
+    expect(element.querySelector('form')).toBeNull();
   });
 
   it('muestra los límites numéricos con formato español', async () => {
