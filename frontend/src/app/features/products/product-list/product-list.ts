@@ -1,5 +1,14 @@
-import { CurrencyPipe, I18nPluralPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { CurrencyPipe, I18nPluralPipe, Location } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { debounceTime, distinctUntilChanged, finalize, map } from 'rxjs';
@@ -70,11 +79,26 @@ export class ProductList {
     return error ? describeHttpError(error.cause ?? error) : null;
   });
 
-  protected readonly statusMessage = signal<string>(
-    inject(Router).currentNavigation()?.extras.state?.['message'] ?? '',
-  );
+  protected readonly statusMessage = signal('');
   protected readonly actionError = signal('');
   protected readonly deletingId = signal<number | null>(null);
+
+  constructor() {
+    const message: string = inject(Router).currentNavigation()?.extras.state?.['message'] ?? '';
+    if (message) {
+      const location = inject(Location);
+      afterNextRender(() => {
+        // Se muestra después del primer render: así la región role="status" ya existe y el lector de
+        // pantalla anuncia el cambio (un contenido que aparece junto con la región no se anuncia).
+        this.statusMessage.set(message);
+        // El aviso llega en history.state y Angular lo restaura al recargar: se quita del historial.
+        const state = { ...((location.getState() ?? {}) as Record<string, unknown>) };
+        delete state['message'];
+        location.replaceState(location.path(), '', state);
+      });
+    }
+  }
+
 
   protected onSearchInput(value: string): void {
     this.searchInput.set(value);
@@ -127,7 +151,13 @@ export class ProductList {
             this.products.reload();
           }
         },
-        error: (error: unknown) => this.actionError.set(describeHttpError(error)),
+        error: (error: unknown) => {
+          this.actionError.set(describeHttpError(error));
+          // Si ya no existía (lo borró otra persona), se recarga para quitar la fila que sobra.
+          if (error instanceof HttpErrorResponse && error.status === 404) {
+            this.products.reload();
+          }
+        },
       });
   }
 }

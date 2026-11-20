@@ -62,6 +62,10 @@ cd frontend && npm run e2e
 | `e2e/product-lifecycle.e2e.ts` | Crear, editar (stock bajo → normal) y eliminar un producto |
 | `e2e/product-filters.e2e.ts` | Búsqueda, filtro por categoría y por stock bajo |
 | `e2e/product-form-errors.e2e.ts` | Validaciones, SKU duplicado y edición de un producto inexistente |
+| `e2e/mobile-layout.e2e.ts` | En móvil (375 px): sin scroll horizontal, cada producto como tarjeta con precio, stock y acciones visibles, filtros compactos y objetivos táctiles de 44 px |
+| `e2e/responsive-layout.e2e.ts` | De 800 a 1280 px, con un nombre largo, la tabla cabe sin scroll interno y las acciones se ven |
+| `e2e/status-message.e2e.ts` | El aviso de producto creado no reaparece al recargar la página |
+| `e2e/delete-missing-product.e2e.ts` | Eliminar un producto que ya no existe muestra el aviso y lo quita del listado |
 
 ## Estructura
 

@@ -181,3 +181,18 @@ input[type='checkbox'] {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Pantallas pequeñas o táctiles: objetivos de al menos 44 px de alto (WCAG 2.5.5). */
+@media (max-width: 56rem), (pointer: coarse) {
+  .button,
+  input:not([type='checkbox']),
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .checkbox {
+    min-height: 44px;
+    padding-bottom: 0;
+  }
+}

@@ -12,6 +12,8 @@
 }
 
 .table-wrapper {
+  /* Contiene los elementos absolutos de la tabla (.visually-hidden) para que no ensanchen la página en móvil */
+  position: relative;
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -28,6 +30,7 @@ td {
   text-align: left;
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 th {
@@ -37,6 +40,13 @@ th {
 
 tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* El nombre (hasta 100 caracteres) puede ocupar varias líneas para que la tabla quepa sin scroll. */
+td.name {
+  min-width: 10rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 tr.low-stock {
@@ -61,10 +71,14 @@ tr.low-stock {
   font-weight: 600;
 }
 
+/* La celda sigue siendo table-cell (con display: flex no ocupa toda la altura de la fila y
+   su borde inferior queda desalineado); los botones se separan con margen. */
 .actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.5rem;
+  text-align: right;
+}
+
+.actions .button + .button {
+  margin-left: 0.5rem;
 }
 
 .pagination {
@@ -80,4 +94,144 @@ tr.low-stock {
   padding: 2rem;
   text-align: center;
   color: var(--text-muted);
+}
+
+/*
+ * Móvil y tablet: filtros en dos columnas y cada producto como una tarjeta sin scroll horizontal.
+ * Por debajo de 56rem las seis columnas no caben en la tabla.
+ */
+@media (max-width: 56rem) {
+  .filters {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .filters .field {
+    min-width: 0;
+  }
+
+  .filters .search-field,
+  .filters .checkbox {
+    grid-column: 1 / -1;
+  }
+
+  .filters select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .table-wrapper {
+    overflow-x: visible;
+  }
+
+  table,
+  tbody,
+  tr,
+  td {
+    display: block;
+  }
+
+  /* La cabecera se oculta visualmente pero sigue disponible para lectores de pantalla. */
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  tbody tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.6rem 0.8rem;
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  td,
+  tbody tr:last-child td {
+    padding: 0;
+    border: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .numeric {
+    text-align: left;
+  }
+
+  /* Etiqueta de cada dato (la cabecera de la tabla no se ve en las tarjetas). */
+  td[data-label]::before {
+    content: attr(data-label);
+    /* Texto alternativo vacío: el lector de pantalla ya anuncia la cabecera de la columna. */
+    content: attr(data-label) / '';
+    display: block;
+    margin-bottom: 0.1rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Nombre como título de la tarjeta y SKU debajo, ambos a lo ancho. */
+  td.name {
+    grid-column: 1 / -1;
+    order: -2;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  td.sku {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  td.name::before,
+  td.sku::before {
+    display: none;
+  }
+
+  .badge {
+    display: inline-block;
+    margin: 0.2rem 0 0;
+  }
+
+  .actions {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 0.5rem;
+  }
+
+  .actions .button + .button {
+    margin-left: 0;
+  }
+
+  .actions .button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Paginación: el texto en su propia fila sobre los botones, con el total en una segunda línea. */
+  .pagination {
+    flex-wrap: wrap;
+  }
+
+  .page-info {
+    order: -1;
+    flex-basis: 100%;
+    text-align: center;
+  }
+
+  .page-info .separator {
+    display: none;
+  }
+
+  .page-info .total {
+    display: block;
+  }
 }

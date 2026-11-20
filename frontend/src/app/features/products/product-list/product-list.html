@@ -5,7 +5,7 @@
   </header>
 
   <div class="filters" role="search">
-    <label class="field">
+    <label class="field search-field">
       <span>Buscar</span>
       <input
         type="search"
@@ -40,7 +40,7 @@
     </label>
   </div>
 
-  <div class="messages" aria-live="polite">
+  <div class="messages" role="status" aria-live="polite">
     @if (statusMessage()) {
       <p class="alert success">{{ statusMessage() }}</p>
     }
@@ -60,32 +60,36 @@
       <p class="empty">No hay productos que coincidan con los filtros.</p>
     } @else {
       <div class="table-wrapper">
-        <table>
+        <!--
+          Los roles explícitos conservan la semántica de tabla cuando en móvil las filas
+          se muestran como tarjetas (display: grid/block anula los roles implícitos).
+        -->
+        <table role="table">
           <caption class="visually-hidden">Listado de productos</caption>
-          <thead>
-            <tr>
-              <th scope="col">SKU</th>
-              <th scope="col">Nombre</th>
-              <th scope="col">Categoría</th>
-              <th scope="col" class="numeric">Precio</th>
-              <th scope="col" class="numeric">Stock</th>
-              <th scope="col"><span class="visually-hidden">Acciones</span></th>
+          <thead role="rowgroup">
+            <tr role="row">
+              <th role="columnheader" scope="col">SKU</th>
+              <th role="columnheader" scope="col">Nombre</th>
+              <th role="columnheader" scope="col">Categoría</th>
+              <th role="columnheader" scope="col" class="numeric">Precio</th>
+              <th role="columnheader" scope="col" class="numeric">Stock</th>
+              <th role="columnheader" scope="col"><span class="visually-hidden">Acciones</span></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody role="rowgroup">
             @for (product of result.items; track product.id) {
-              <tr [class.low-stock]="product.isLowStock">
-                <td class="mono">{{ product.sku }}</td>
-                <td>{{ product.name }}</td>
-                <td>{{ product.categoryName }}</td>
-                <td class="numeric">{{ product.price | currency }}</td>
-                <td class="numeric">
+              <tr role="row" [class.low-stock]="product.isLowStock">
+                <td role="cell" class="mono sku" data-label="SKU">{{ product.sku }}</td>
+                <td role="cell" class="name" data-label="Nombre">{{ product.name }}</td>
+                <td role="cell" data-label="Categoría">{{ product.categoryName }}</td>
+                <td role="cell" class="numeric" data-label="Precio">{{ product.price | currency }}</td>
+                <td role="cell" class="numeric" data-label="Stock">
                   {{ product.stock }}
                   @if (product.isLowStock) {
                     <span class="badge" title="Stock mínimo: {{ product.minStock }}">Stock bajo</span>
                   }
                 </td>
-                <td class="actions">
+                <td role="cell" class="actions">
                   <a class="button" [routerLink]="['/products', product.id, 'edit']" [attr.aria-label]="'Editar ' + product.name">Editar</a>
                   <button
                     type="button"
@@ -105,7 +109,9 @@
 
       <nav class="pagination" aria-label="Paginación">
         <button type="button" class="button" [disabled]="page() <= 1" (click)="goToPage(page() - 1)">Anterior</button>
-        <span>Página {{ result.page }} de {{ totalPages() }} · {{ result.totalCount | i18nPlural: productCountLabels }}</span>
+        <span class="page-info">
+          Página {{ result.page }} de {{ totalPages() }}<span class="separator" aria-hidden="true"> · </span><span class="total">{{ result.totalCount | i18nPlural: productCountLabels }}</span>
+        </span>
         <button type="button" class="button" [disabled]="page() >= totalPages()" (click)="goToPage(page() + 1)">Siguiente</button>
       </nav>
     }

@@ -1,7 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
+import { Location } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { provideSpanishLocale } from '../../../core/locale/provide-spanish-locale';
 import { buildPage, buildProduct, categories } from '../testing/product-fixtures';
 import { ProductList } from './product-list';
@@ -135,6 +137,23 @@ describe('ProductList', () => {
     httpMock.expectNone('/api/products/1');
   });
 
+  it('si el producto ya no existía (404) muestra el aviso y recarga la lista para quitar la fila', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    (element.querySelector('button.danger') as HTMLButtonElement).click();
+    httpMock
+      .expectOne('/api/products/1')
+      .flush(
+        { title: 'Producto no encontrado', detail: 'No existe ningún producto con el id 1.' },
+        { status: 404, statusText: 'Not Found' },
+      );
+    expectProductsRequest().flush(buildPage([lowStockProduct]));
+    await render();
+
+    expect(element.querySelector('.alert.error')?.textContent).toContain('No existe ningún producto con el id 1.');
+    expect(element.querySelectorAll('tbody tr').length).toBe(1);
+  });
+
   it('muestra el error si falla el borrado', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
@@ -145,5 +164,36 @@ describe('ProductList', () => {
     await render();
 
     expect(element.querySelector('.alert.error')?.textContent).toContain('No se pudo eliminar.');
+  });
+});
+
+describe('ProductList · aviso tras guardar', () => {
+  it('muestra el aviso recibido en la navegación y lo quita del historial para que no reaparezca al recargar', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([{ path: 'products', component: ProductList }]),
+        provideSpanishLocale(),
+      ],
+    });
+    const httpMock = TestBed.inject(HttpTestingController);
+    const harness = await RouterTestingHarness.create();
+
+    await TestBed.inject(Router).navigateByUrl('/products', { state: { message: 'Producto TEST-1 creado.' } });
+    TestBed.tick();
+    httpMock.expectOne('/api/categories').flush(categories);
+    httpMock.expectOne((req) => req.url === '/api/products').flush(buildPage([buildProduct()]));
+    harness.detectChanges();
+    await harness.fixture.whenStable();
+
+    // Dentro de una región role="status" para que el lector de pantalla lo anuncie.
+    expect(harness.routeNativeElement?.querySelector('[role="status"] .alert.success')?.textContent).toContain(
+      'Producto TEST-1 creado.',
+    );
+    // Al recargar, Angular restaura history.state: el mensaje no debe seguir ahí.
+    const state = TestBed.inject(Location).getState() as Record<string, unknown> | null;
+    expect(state?.['message']).toBeUndefined();
+    httpMock.verify();
   });
 });
