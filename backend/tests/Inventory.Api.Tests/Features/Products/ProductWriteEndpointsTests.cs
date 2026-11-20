@@ -1,10 +1,12 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
+using Inventory.Api.Data;
 using Inventory.Api.Features.Products;
 using Inventory.Api.Tests.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Inventory.Api.Tests.Features.Products;
@@ -146,6 +148,34 @@ public sealed class ProductWriteEndpointsTests(InventoryApiFactory factory) : IC
         Assert.Equal("Renamed", updated.Name);
         Assert.Equal("Furniture", updated.CategoryName);
         Assert.Equal(99.95m, updated.Price);
+        Assert.True(updated.IsLowStock);
+        Assert.NotNull(updated.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_UseMinimalDatabaseRoundTrips()
+    {
+        var counter = new CommandCounter();
+        var client = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.ConfigureDbContext<InventoryDbContext>(options => options.AddInterceptors(counter))))
+            .CreateClient();
+
+        // Crear: comprobar la categoría, comprobar el SKU e INSERT.
+        var createResponse = await client.PostAsJsonAsync("/api/products", NewRequest("TEST-TRIPS-1"));
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        Assert.Equal(3, counter.Count);
+        var created = (await createResponse.Content.ReadFromJsonAsync<ProductResponse>())!;
+        Assert.Equal("Electronics", created.CategoryName);
+
+        // Editar (cambiando de categoría): leer el producto, la categoría, comprobar el SKU y UPDATE.
+        counter.Reset();
+        var updateResponse = await client.PutAsJsonAsync(
+            $"/api/products/{created.Id}", NewRequest("TEST-TRIPS-1") with { CategoryId = 3, Stock = 1, MinStock = 5 });
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        Assert.Equal(4, counter.Count);
+        var updated = (await updateResponse.Content.ReadFromJsonAsync<ProductResponse>())!;
+        Assert.Equal(3, updated.CategoryId);
+        Assert.Equal("Furniture", updated.CategoryName);
         Assert.True(updated.IsLowStock);
         Assert.NotNull(updated.UpdatedAt);
     }

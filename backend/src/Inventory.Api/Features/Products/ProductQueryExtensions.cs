@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using Inventory.Api.Data;
 
 namespace Inventory.Api.Features.Products;
@@ -19,6 +19,9 @@ internal static class ProductQueryExtensions
         p.Stock <= p.MinStock,
         p.CreatedAt,
         p.UpdatedAt);
+
+    /// <summary>La misma proyección en memoria, para una entidad recién guardada con su categoría cargada.</summary>
+    public static readonly Func<Product, ProductResponse> ToResponseInMemory = ToResponse.Compile();
 
     public static IQueryable<Product> ApplyFilters(this IQueryable<Product> source, ProductQuery query)
     {

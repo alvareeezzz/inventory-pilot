@@ -62,7 +62,9 @@ public static class ProductEndpoints
     {
         var sku = NormalizeSku(request.Sku);
 
-        if (!await db.Categories.AnyAsync(c => c.Id == request.CategoryId, ct))
+        // Se carga la categoría (y no solo se comprueba) para construir la respuesta sin volver a consultar.
+        var category = await db.Categories.FindAsync([request.CategoryId], ct);
+        if (category is null)
         {
             return UnknownCategory(request.CategoryId);
         }
@@ -77,7 +79,8 @@ public static class ProductEndpoints
             Sku = sku,
             Name = request.Name.Trim(),
             Description = NormalizeDescription(request.Description),
-            CategoryId = request.CategoryId,
+            CategoryId = category.Id,
+            Category = category,
             Price = request.Price,
             Stock = request.Stock,
             MinStock = request.MinStock,
@@ -90,7 +93,7 @@ public static class ProductEndpoints
             return DuplicateSku(sku);
         }
 
-        var response = (await FindResponseAsync(db, product.Id, ct))!;
+        var response = ProductQueryExtensions.ToResponseInMemory(product);
         return TypedResults.CreatedAtRoute(response, "GetProduct", new { id = product.Id });
     }
 
@@ -109,7 +112,8 @@ public static class ProductEndpoints
 
         var sku = NormalizeSku(request.Sku);
 
-        if (!await db.Categories.AnyAsync(c => c.Id == request.CategoryId, ct))
+        var category = await db.Categories.FindAsync([request.CategoryId], ct);
+        if (category is null)
         {
             return UnknownCategory(request.CategoryId);
         }
@@ -122,7 +126,8 @@ public static class ProductEndpoints
         product.Sku = sku;
         product.Name = request.Name.Trim();
         product.Description = NormalizeDescription(request.Description);
-        product.CategoryId = request.CategoryId;
+        product.CategoryId = category.Id;
+        product.Category = category;
         product.Price = request.Price;
         product.Stock = request.Stock;
         product.MinStock = request.MinStock;
@@ -133,7 +138,7 @@ public static class ProductEndpoints
             return DuplicateSku(sku);
         }
 
-        return TypedResults.Ok((await FindResponseAsync(db, id, ct))!);
+        return TypedResults.Ok(ProductQueryExtensions.ToResponseInMemory(product));
     }
 
     private static async Task<Results<NoContent, ProblemHttpResult>> DeleteProductAsync(

@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Inventory.Api.Data;
 
 namespace Inventory.Api.Features.Products;
 
@@ -19,31 +20,31 @@ public sealed record ProductResponse(
 /// <summary>Datos para crear o actualizar un producto.</summary>
 public sealed record ProductRequest
 {
-    // Mensajes en español: se muestran tal cual en el formulario del frontend.
+    // Límites en Product (compartidos con la base de datos). Mensajes en español: se muestran tal cual en
+    // el formulario del frontend; si cambia un límite, hay que actualizar su mensaje (lo comprueban los tests).
     [Required(ErrorMessage = "El SKU es obligatorio.")]
-    [StringLength(32, ErrorMessage = "El SKU no puede superar los 32 caracteres.")]
-    // Se admiten espacios alrededor porque el SKU se recorta y pasa a mayúsculas al guardarlo.
-    [RegularExpression(@"^\s*[A-Za-z0-9-]+\s*$", ErrorMessage = "El SKU solo puede contener letras, números y guiones.")]
+    [StringLength(Product.SkuMaxLength, ErrorMessage = "El SKU no puede superar los 32 caracteres.")]
+    [RegularExpression(Product.SkuPattern, ErrorMessage = "El SKU solo puede contener letras, números y guiones.")]
     public string Sku { get; init; } = string.Empty;
 
     [Required(ErrorMessage = "El nombre es obligatorio.")]
-    [StringLength(100, ErrorMessage = "El nombre no puede superar los 100 caracteres.")]
+    [StringLength(Product.NameMaxLength, ErrorMessage = "El nombre no puede superar los 100 caracteres.")]
     public string Name { get; init; } = string.Empty;
 
-    [StringLength(500, ErrorMessage = "La descripción no puede superar los 500 caracteres.")]
+    [StringLength(Product.DescriptionMaxLength, ErrorMessage = "La descripción no puede superar los 500 caracteres.")]
     public string? Description { get; init; }
 
     [Range(1, int.MaxValue, ErrorMessage = "Selecciona una categoría.")]
     public int CategoryId { get; init; }
 
-    [Range(typeof(decimal), "0.01", "1000000", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
+    [Range(typeof(decimal), Product.MinPrice, Product.MaxPrice, ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true,
         ErrorMessage = "El precio debe estar entre 0,01 y 1.000.000.")]
     public decimal Price { get; init; }
 
-    [Range(0, 1_000_000, ErrorMessage = "El stock debe ser un número entero entre 0 y 1.000.000.")]
+    [Range(0, Product.MaxQuantity, ErrorMessage = "El stock debe ser un número entero entre 0 y 1.000.000.")]
     public int Stock { get; init; }
 
-    [Range(0, 1_000_000, ErrorMessage = "El stock mínimo debe ser un número entero entre 0 y 1.000.000.")]
+    [Range(0, Product.MaxQuantity, ErrorMessage = "El stock mínimo debe ser un número entero entre 0 y 1.000.000.")]
     public int MinStock { get; init; }
 }
 
