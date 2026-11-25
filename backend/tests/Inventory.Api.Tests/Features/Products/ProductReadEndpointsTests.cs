@@ -1,9 +1,10 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Inventory.Api.Common;
 using Inventory.Api.Features.Categories;
 using Inventory.Api.Features.Products;
 using Inventory.Api.Tests.Infrastructure;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Inventory.Api.Tests.Features.Products;
 
@@ -85,6 +86,49 @@ public sealed class ProductReadEndpointsTests(InventoryApiFactory factory) : ICl
         var response = await _client.GetAsync("/api/products/999999");
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
+    public async Task ProductEndpoints_WithUnknownId_ReturnSpanishProblem(string method)
+    {
+        using var request = new HttpRequestMessage(new HttpMethod(method), "/api/products/999999");
+        if (method == "PUT")
+        {
+            request.Content = JsonContent.Create(new ProductRequest
+            {
+                Sku = "TEST-404", Name = "Test", CategoryId = 1, Price = 1m, Stock = 1, MinStock = 0,
+            });
+        }
+
+        var response = await _client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Producto no encontrado", problem?.Title);
+        Assert.Equal("No existe ningún producto con el id 999999.", problem?.Detail);
+    }
+
+    [Fact]
+    public async Task UnknownRoute_ReturnsSpanishProblem()
+    {
+        var response = await _client.GetAsync("/api/does-not-exist");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        Assert.Equal("Recurso no encontrado", problem?.Title);
+    }
+
+    [Fact]
+    public async Task GetProducts_WithInvalidQuery_ReturnsSpanishTitle()
+    {
+        var response = await _client.GetAsync("/api/products?pageSize=0");
+
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        Assert.Equal("Los datos enviados no son válidos.", problem?.Title);
     }
 
     [Fact]

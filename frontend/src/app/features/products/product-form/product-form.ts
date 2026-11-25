@@ -4,6 +4,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   LOCALE_ID,
   OnInit,
   computed,
@@ -12,18 +13,17 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidatorFn, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { describeHttpError, getProblemDetails } from '../../../core/http/problem-details';
-import { Product, ProductRequest } from '../data/product.models';
+import { PRODUCT_RULES, Product, ProductRequest } from '../data/product.models';
 import { ProductsApi } from '../data/products-api';
 
-const MAX_AMOUNT = 1_000_000;
 const INTEGER = /^\d+$/;
-
-/** Mismas reglas que valida la API (ProductRequest). */
-const SKU_PATTERN = /^\s*[A-Za-z0-9-]+\s*$/;
+/** Id de ruta válido: entero positivo sin signo, decimales ni notación científica. */
+const PRODUCT_ID = /^[1-9]\d*$/;
+const NOT_FOUND_MESSAGE = 'El producto no existe o ha sido eliminado.';
 
 type FieldName = 'sku' | 'name' | 'description' | 'categoryId' | 'price' | 'stock' | 'minStock';
 
@@ -39,31 +39,45 @@ export class ProductForm implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly locale = inject(LOCALE_ID);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** Parámetro de ruta ":id" (solo en edición). */
   readonly id = input<string>();
 
   protected readonly isEdit = computed(() => this.id() !== undefined);
-  protected readonly categories = this.api.categoriesResource();
+  protected readonly categoryList = this.api.categoryList;
+  protected readonly categoriesFailed = this.api.categoriesFailed;
   protected readonly loading = signal(false);
   /** Edición sin producto cargado (no existe o falló la carga): no se muestra el formulario. */
   protected readonly loadFailed = signal(false);
   protected readonly saving = signal(false);
   protected readonly errorMessage = signal('');
 
+  protected readonly rules = PRODUCT_RULES;
+
   protected readonly form = inject(NonNullableFormBuilder).group({
-    sku: ['', [Validators.required, Validators.maxLength(32), Validators.pattern(SKU_PATTERN)]],
-    name: ['', [Validators.required, Validators.maxLength(100)]],
-    description: ['', [Validators.maxLength(500)]],
+    sku: ['', [Validators.required, Validators.maxLength(PRODUCT_RULES.skuMaxLength), Validators.pattern(PRODUCT_RULES.skuPattern)]],
+    name: ['', [Validators.required, Validators.maxLength(PRODUCT_RULES.nameMaxLength)]],
+    description: ['', [Validators.maxLength(PRODUCT_RULES.descriptionMaxLength)]],
     categoryId: [0, [Validators.min(1)]],
-    price: [0, [Validators.required, Validators.min(0.01), Validators.max(MAX_AMOUNT)]],
-    stock: [0, [Validators.required, Validators.min(0), Validators.max(MAX_AMOUNT), Validators.pattern(INTEGER)]],
-    minStock: [0, [Validators.required, Validators.min(0), Validators.max(MAX_AMOUNT), Validators.pattern(INTEGER)]],
+    price: [0, [Validators.required, Validators.min(PRODUCT_RULES.minPrice), Validators.max(PRODUCT_RULES.maxAmount)]],
+    stock: quantity(),
+    minStock: quantity(),
   });
 
   ngOnInit(): void {
+    // Carga las categorías compartidas (o las reintenta si la carga anterior falló).
+    this.api.loadCategories();
+
     const id = this.id();
     if (id === undefined) {
+      return;
+    }
+
+    // Un id no numérico (/products/abc/edit) no puede existir: se avisa sin llamar a la API.
+    if (!PRODUCT_ID.test(id)) {
+      this.loadFailed.set(true);
+      this.errorMessage.set(NOT_FOUND_MESSAGE);
       return;
     }
 
@@ -80,7 +94,7 @@ export class ProductForm implements OnInit {
           this.loadFailed.set(true);
           this.errorMessage.set(
             error instanceof HttpErrorResponse && error.status === 404
-              ? 'El producto no existe o ha sido eliminado.'
+              ? NOT_FOUND_MESSAGE
               : describeHttpError(error),
           );
         },
@@ -90,6 +104,7 @@ export class ProductForm implements OnInit {
   protected submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
+      this.focusFirstInvalidField();
       return;
     }
 
@@ -159,6 +174,7 @@ export class ProductForm implements OnInit {
     if (status === 409) {
       this.form.controls.sku.setErrors({ duplicate: true });
       this.form.controls.sku.markAsTouched();
+      this.focusFirstInvalidField();
       return;
     }
 
@@ -174,6 +190,7 @@ export class ProductForm implements OnInit {
         }
       }
       if (mapped) {
+        this.focusFirstInvalidField();
         return;
       }
     }
@@ -181,10 +198,24 @@ export class ProductForm implements OnInit {
     this.errorMessage.set(describeHttpError(error));
   }
 
+  /** Lleva el foco al primer campo con error, en el orden en que aparecen en pantalla. */
+  private focusFirstInvalidField(): void {
+    const fields = this.host.nativeElement.querySelectorAll<HTMLElement>('[formControlName]');
+    const firstInvalid = Array.from(fields).find(
+      (field) => this.form.get(field.getAttribute('formControlName') ?? '')?.invalid,
+    );
+    firstInvalid?.focus();
+  }
+
   private findControl(field: string): AbstractControl | null {
     const name = Object.keys(this.form.controls).find((key) => key.toLowerCase() === field.toLowerCase());
     return name ? this.form.get(name) : null;
   }
+}
+
+/** Stock y stock mínimo: enteros entre 0 y el máximo. */
+function quantity(): [number, ValidatorFn[]] {
+  return [0, [Validators.required, Validators.min(0), Validators.max(PRODUCT_RULES.maxAmount), Validators.pattern(INTEGER)]];
 }
 
 function describeControlError(control: AbstractControl, locale: string): string {

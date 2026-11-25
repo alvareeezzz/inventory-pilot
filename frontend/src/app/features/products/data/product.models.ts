@@ -20,6 +20,22 @@ export interface Product {
   updatedAt: string | null;
 }
 
+/**
+ * Límites de un producto: los mismos que valida la API (constantes de Product en el backend).
+ * El e2e validation-limits comprueba que coinciden.
+ */
+export const PRODUCT_RULES = {
+  skuMaxLength: 32,
+  nameMaxLength: 100,
+  descriptionMaxLength: 500,
+  /** Búsqueda del listado (ProductQuery.SearchMaxLength en la API). */
+  searchMaxLength: 100,
+  minPrice: 0.01,
+  maxAmount: 1_000_000,
+  /** Letras, números y guiones (se admiten espacios alrededor porque el SKU se recorta). */
+  skuPattern: /^\s*[A-Za-z0-9-]+\s*$/,
+} as const;
+
 export interface ProductRequest {
   sku: string;
   name: string;

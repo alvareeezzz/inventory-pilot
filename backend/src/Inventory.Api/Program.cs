@@ -1,4 +1,4 @@
-using Inventory.Api.Common;
+﻿using Inventory.Api.Common;
 using Inventory.Api.Data;
 using Inventory.Api.Features.Categories;
 using Inventory.Api.Features.Products;
@@ -7,7 +7,8 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddProblemDetails();
+// Títulos en español para los errores que genera el propio framework (404 de ruta, validación...).
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = SpanishProblemTitles.Apply);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddValidation();
 builder.Services.AddHealthChecks();

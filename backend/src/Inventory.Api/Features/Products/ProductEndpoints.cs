@@ -1,4 +1,4 @@
-using Inventory.Api.Common;
+﻿using Inventory.Api.Common;
 using Inventory.Api.Data;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +14,13 @@ public static class ProductEndpoints
         var group = api.MapGroup("/products").WithTags("Products");
 
         group.MapGet("/", GetProductsAsync).WithName("GetProducts");
-        group.MapGet("/{id:int}", GetProductAsync).WithName("GetProduct");
+        group.MapGet("/{id:int}", GetProductAsync).WithName("GetProduct")
+            .ProducesProblem(StatusCodes.Status404NotFound);
         group.MapPost("/", CreateProductAsync).WithName("CreateProduct");
-        group.MapPut("/{id:int}", UpdateProductAsync).WithName("UpdateProduct");
-        group.MapDelete("/{id:int}", DeleteProductAsync).WithName("DeleteProduct");
+        group.MapPut("/{id:int}", UpdateProductAsync).WithName("UpdateProduct")
+            .ProducesProblem(StatusCodes.Status404NotFound);
+        group.MapDelete("/{id:int}", DeleteProductAsync).WithName("DeleteProduct")
+            .ProducesProblem(StatusCodes.Status404NotFound);
 
         return api;
     }
@@ -42,13 +45,13 @@ public static class ProductEndpoints
         return TypedResults.Ok(new PagedResponse<ProductResponse>(items, page, pageSize, totalCount));
     }
 
-    private static async Task<Results<Ok<ProductResponse>, NotFound>> GetProductAsync(
+    private static async Task<Results<Ok<ProductResponse>, ProblemHttpResult>> GetProductAsync(
         int id,
         InventoryDbContext db,
         CancellationToken ct)
     {
         var product = await FindResponseAsync(db, id, ct);
-        return product is null ? TypedResults.NotFound() : TypedResults.Ok(product);
+        return product is null ? ProductNotFound(id) : TypedResults.Ok(product);
     }
 
     private static async Task<Results<CreatedAtRoute<ProductResponse>, ValidationProblem, Conflict<ProblemDetails>>> CreateProductAsync(
@@ -59,7 +62,9 @@ public static class ProductEndpoints
     {
         var sku = NormalizeSku(request.Sku);
 
-        if (!await db.Categories.AnyAsync(c => c.Id == request.CategoryId, ct))
+        // Se carga la categoría (y no solo se comprueba) para construir la respuesta sin volver a consultar.
+        var category = await db.Categories.FindAsync([request.CategoryId], ct);
+        if (category is null)
         {
             return UnknownCategory(request.CategoryId);
         }
@@ -74,7 +79,8 @@ public static class ProductEndpoints
             Sku = sku,
             Name = request.Name.Trim(),
             Description = NormalizeDescription(request.Description),
-            CategoryId = request.CategoryId,
+            CategoryId = category.Id,
+            Category = category,
             Price = request.Price,
             Stock = request.Stock,
             MinStock = request.MinStock,
@@ -87,31 +93,34 @@ public static class ProductEndpoints
             return DuplicateSku(sku);
         }
 
-        var response = (await FindResponseAsync(db, product.Id, ct))!;
+        var response = ProductQueryExtensions.ToResponseInMemory(product);
         return TypedResults.CreatedAtRoute(response, "GetProduct", new { id = product.Id });
     }
 
-    private static async Task<Results<Ok<ProductResponse>, NotFound, ValidationProblem, Conflict<ProblemDetails>>> UpdateProductAsync(
+    private static async Task<Results<Ok<ProductResponse>, ProblemHttpResult, ValidationProblem, Conflict<ProblemDetails>>> UpdateProductAsync(
         int id,
         ProductRequest request,
         InventoryDbContext db,
         TimeProvider clock,
         CancellationToken ct)
     {
-        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
+        // Con su categoría (mismo viaje): si no cambia, FindAsync la encuentra ya cargada sin consultar.
+        var product = await db.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null)
         {
-            return TypedResults.NotFound();
+            return ProductNotFound(id);
         }
 
         var sku = NormalizeSku(request.Sku);
 
-        if (!await db.Categories.AnyAsync(c => c.Id == request.CategoryId, ct))
+        var category = await db.Categories.FindAsync([request.CategoryId], ct);
+        if (category is null)
         {
             return UnknownCategory(request.CategoryId);
         }
 
-        if (await db.Products.AnyAsync(p => p.Sku == sku && p.Id != id, ct))
+        // El SKU guardado ya está normalizado: solo se comprueba si cambia (el índice único cubre las carreras).
+        if (sku != product.Sku && await db.Products.AnyAsync(p => p.Sku == sku && p.Id != id, ct))
         {
             return DuplicateSku(sku);
         }
@@ -119,7 +128,8 @@ public static class ProductEndpoints
         product.Sku = sku;
         product.Name = request.Name.Trim();
         product.Description = NormalizeDescription(request.Description);
-        product.CategoryId = request.CategoryId;
+        product.CategoryId = category.Id;
+        product.Category = category;
         product.Price = request.Price;
         product.Stock = request.Stock;
         product.MinStock = request.MinStock;
@@ -130,16 +140,16 @@ public static class ProductEndpoints
             return DuplicateSku(sku);
         }
 
-        return TypedResults.Ok((await FindResponseAsync(db, id, ct))!);
+        return TypedResults.Ok(ProductQueryExtensions.ToResponseInMemory(product));
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteProductAsync(
+    private static async Task<Results<NoContent, ProblemHttpResult>> DeleteProductAsync(
         int id,
         InventoryDbContext db,
         CancellationToken ct)
     {
         var deleted = await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
-        return deleted == 0 ? TypedResults.NotFound() : TypedResults.NoContent();
+        return deleted == 0 ? ProductNotFound(id) : TypedResults.NoContent();
     }
 
     private static Task<ProductResponse?> FindResponseAsync(InventoryDbContext db, int id, CancellationToken ct) =>
@@ -173,6 +183,13 @@ public static class ProductEndpoints
         {
             [nameof(ProductRequest.CategoryId)] = [$"La categoría {categoryId} no existe."],
         });
+
+    // TypedResults.Problem (y no NotFound(value)) para responder con application/problem+json.
+    private static ProblemHttpResult ProductNotFound(int id) =>
+        TypedResults.Problem(
+            statusCode: StatusCodes.Status404NotFound,
+            title: "Producto no encontrado",
+            detail: $"No existe ningún producto con el id {id}.");
 
     private static Conflict<ProblemDetails> DuplicateSku(string sku) =>
         TypedResults.Conflict(new ProblemDetails

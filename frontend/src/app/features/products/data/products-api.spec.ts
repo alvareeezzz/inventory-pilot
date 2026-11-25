@@ -1,5 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { ApplicationRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ProductFilters, ProductRequest } from './product.models';
 import { ProductsApi, toQueryParams } from './products-api';
@@ -77,5 +78,48 @@ describe('ProductsApi', () => {
     const req = httpMock.expectOne('/api/products/7');
     expect(req.request.method).toBe('DELETE');
     req.flush(null, { status: 204, statusText: 'No Content' });
+  });
+});
+
+describe('ProductsApi · categorías', () => {
+  it('pide las categorías una sola vez aunque las usen varias pantallas', async () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const httpMock = TestBed.inject(HttpTestingController);
+    const api = TestBed.inject(ProductsApi);
+
+    // El listado y el formulario leen el mismo recurso compartido.
+    api.loadCategories();
+    const fromList = api.categories;
+    TestBed.tick();
+    httpMock.expectOne('/api/categories').flush([{ id: 1, name: 'Electronics' }]);
+    await TestBed.inject(ApplicationRef).whenStable();
+    api.loadCategories();
+    const fromForm = api.categories;
+    TestBed.tick();
+
+    httpMock.expectNone('/api/categories');
+    expect(fromForm).toBe(fromList);
+    expect(fromForm.value()).toEqual([{ id: 1, name: 'Electronics' }]);
+    httpMock.verify();
+  });
+});
+
+describe('ProductsApi · categorías tras un error', () => {
+  it('si la carga falló, la reintenta cuando otra pantalla las vuelve a pedir', async () => {
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const httpMock = TestBed.inject(HttpTestingController);
+    const api = TestBed.inject(ProductsApi);
+
+    api.loadCategories();
+    TestBed.tick();
+    httpMock.expectOne('/api/categories').flush(null, { status: 500, statusText: 'Server Error' });
+    await TestBed.inject(ApplicationRef).whenStable();
+    expect(api.categories.error()).toBeTruthy();
+
+    api.loadCategories();
+    TestBed.tick();
+    httpMock.expectOne('/api/categories').flush([{ id: 1, name: 'Electronics' }]);
+    await TestBed.inject(ApplicationRef).whenStable();
+    expect(api.categories.value()).toEqual([{ id: 1, name: 'Electronics' }]);
   });
 });
