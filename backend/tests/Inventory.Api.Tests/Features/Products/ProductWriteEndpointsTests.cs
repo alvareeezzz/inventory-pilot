@@ -167,12 +167,22 @@ public sealed class ProductWriteEndpointsTests(InventoryApiFactory factory) : IC
         var created = (await createResponse.Content.ReadFromJsonAsync<ProductResponse>())!;
         Assert.Equal("Electronics", created.CategoryName);
 
-        // Editar (cambiando de categoría): leer el producto, la categoría, comprobar el SKU y UPDATE.
+        // Editar sin cambiar SKU ni categoría (lo habitual): leer el producto con su categoría y UPDATE.
+        counter.Reset();
+        var sameResponse = await client.PutAsJsonAsync(
+            $"/api/products/{created.Id}", NewRequest("test-trips-1") with { Price = 99m });
+        Assert.Equal(HttpStatusCode.OK, sameResponse.StatusCode);
+        Assert.Equal(2, counter.Count);
+        var same = (await sameResponse.Content.ReadFromJsonAsync<ProductResponse>())!;
+        Assert.Equal("Electronics", same.CategoryName);
+        Assert.Equal(99m, same.Price);
+
+        // Editar cambiando de categoría: además, cargar la categoría nueva.
         counter.Reset();
         var updateResponse = await client.PutAsJsonAsync(
             $"/api/products/{created.Id}", NewRequest("TEST-TRIPS-1") with { CategoryId = 3, Stock = 1, MinStock = 5 });
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
-        Assert.Equal(4, counter.Count);
+        Assert.Equal(3, counter.Count);
         var updated = (await updateResponse.Content.ReadFromJsonAsync<ProductResponse>())!;
         Assert.Equal(3, updated.CategoryId);
         Assert.Equal("Furniture", updated.CategoryName);

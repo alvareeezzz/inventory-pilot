@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Reflection;
 using Inventory.Api.Data;
@@ -15,14 +15,26 @@ public sealed class ProductRulesTests
 {
     private static readonly CultureInfo Spanish = CultureInfo.GetCultureInfo("es-ES");
 
-    public static TheoryData<string> RequestProperties() =>
-        new(typeof(ProductRequest).GetProperties().Select(p => p.Name));
+    public static TheoryData<string, string> ValidatedProperties()
+    {
+        var data = new TheoryData<string, string>();
+        foreach (var type in new[] { typeof(ProductRequest), typeof(ProductQuery) })
+        {
+            foreach (var property in type.GetProperties())
+            {
+                data.Add(type.Name, property.Name);
+            }
+        }
+
+        return data;
+    }
 
     [Theory]
-    [MemberData(nameof(RequestProperties))]
-    public void ValidationMessages_ContainTheirLimits(string propertyName)
+    [MemberData(nameof(ValidatedProperties))]
+    public void ValidationMessages_ContainTheirLimits(string typeName, string propertyName)
     {
-        var property = typeof(ProductRequest).GetProperty(propertyName)!;
+        var type = typeName == nameof(ProductRequest) ? typeof(ProductRequest) : typeof(ProductQuery);
+        var property = type.GetProperty(propertyName)!;
 
         if (property.GetCustomAttribute<StringLengthAttribute>() is { } length)
         {

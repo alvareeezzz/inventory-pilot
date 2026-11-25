@@ -104,7 +104,8 @@ public static class ProductEndpoints
         TimeProvider clock,
         CancellationToken ct)
     {
-        var product = await db.Products.FirstOrDefaultAsync(p => p.Id == id, ct);
+        // Con su categoría (mismo viaje): si no cambia, FindAsync la encuentra ya cargada sin consultar.
+        var product = await db.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id, ct);
         if (product is null)
         {
             return ProductNotFound(id);
@@ -118,7 +119,8 @@ public static class ProductEndpoints
             return UnknownCategory(request.CategoryId);
         }
 
-        if (await db.Products.AnyAsync(p => p.Sku == sku && p.Id != id, ct))
+        // El SKU guardado ya está normalizado: solo se comprueba si cambia (el índice único cubre las carreras).
+        if (sku != product.Sku && await db.Products.AnyAsync(p => p.Sku == sku && p.Id != id, ct))
         {
             return DuplicateSku(sku);
         }

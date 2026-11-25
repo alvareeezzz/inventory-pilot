@@ -54,6 +54,9 @@ public sealed class ProductQuery
     public const int DefaultPageSize = 10;
     public const int MaxPageSize = 100;
 
+    /// <summary>Longitud máxima de la búsqueda (el frontend tiene la misma en PRODUCT_RULES.searchMaxLength).</summary>
+    public const int SearchMaxLength = 100;
+
     // Nullable: con [AsParameters] un int no anulable se considera obligatorio en la query string.
     [Range(1, int.MaxValue, ErrorMessage = "La página debe ser mayor o igual que 1.")]
     public int? Page { get; init; }
@@ -65,7 +68,7 @@ public sealed class ProductQuery
 
     public int PageSizeOrDefault => PageSize ?? DefaultPageSize;
 
-    [StringLength(100, ErrorMessage = "La búsqueda no puede superar los 100 caracteres.")]
+    [StringLength(SearchMaxLength, ErrorMessage = "La búsqueda no puede superar los 100 caracteres.")]
     public string? Search { get; init; }
 
     public int? CategoryId { get; init; }
