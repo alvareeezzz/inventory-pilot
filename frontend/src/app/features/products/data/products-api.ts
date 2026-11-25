@@ -24,12 +24,11 @@ export class ProductsApi {
 
   readonly categoriesFailed = computed(() => this.categories.status() === 'error');
 
-  /** Devuelve las categorías compartidas; si la última carga falló, la reintenta. */
-  loadCategories() {
+  /** Lanza la carga de las categorías compartidas o, si la última falló, la reintenta. */
+  loadCategories(): void {
     if (this.categories.error()) {
       this.categories.reload();
     }
-    return this.categories;
   }
 
   /** Listado reactivo: se recarga solo cuando cambian los filtros. Llamar en contexto de inyección. */

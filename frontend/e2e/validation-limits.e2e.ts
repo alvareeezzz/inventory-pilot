@@ -11,6 +11,7 @@ const LIMITS = {
   description: { max: 500, message: 'La descripción no puede superar los 500 caracteres.' },
 };
 const MAX_AMOUNT = 1_000_000;
+const SEARCH_MAX = 100;
 
 async function post(request: APIRequestContext, overrides: Record<string, unknown>) {
   return request.post('/api/products', {
@@ -42,6 +43,16 @@ test.describe('límites de validación', () => {
       expect(rejected.status(), `${field} = ${MAX_AMOUNT + 1}`).toBe(400);
       expect(JSON.stringify((await rejected.json()).errors)).toContain('1.000.000');
     }
+  });
+
+  test('la búsqueda del listado tiene el mismo límite en el campo y en la API', async ({ page, request }) => {
+    expect((await request.get(`/api/products?search=${'x'.repeat(SEARCH_MAX)}`)).status()).toBe(200);
+    const rejected = await request.get(`/api/products?search=${'x'.repeat(SEARCH_MAX + 1)}`);
+    expect(rejected.status()).toBe(400);
+    expect(JSON.stringify((await rejected.json()).errors)).toContain(`${SEARCH_MAX} caracteres`);
+
+    await page.goto('/products');
+    await expect(page.getByRole('searchbox', { name: 'Buscar' })).toHaveAttribute('maxlength', String(SEARCH_MAX));
   });
 
   test('el formulario limita los textos y los importes a los mismos valores', async ({ page }) => {

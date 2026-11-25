@@ -92,6 +92,27 @@ describe('ProductList', () => {
       expect(element.querySelector('.table-wrapper')?.getAttribute('aria-busy')).toBe('false');
     });
 
+    it('al buscar desde la página 2 hace una sola petición, a la página 1 y ya filtrada', async () => {
+      await showTwoPages();
+      pageButton('Siguiente').click();
+      expectProductsRequest().flush(buildPage([lowStockProduct], { page: 2, totalCount: 11, totalPages: 2 }));
+      await render();
+
+      const search = element.querySelector('input[type="search"]') as HTMLInputElement;
+      search.value = 'mouse';
+      search.dispatchEvent(new Event('input'));
+      TestBed.tick();
+      // Antes de que termine la espera de la búsqueda no debe salir ninguna petición.
+      httpMock.expectNone(isProductsRequest);
+
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const req = expectProductsRequest();
+      expect(req.request.params.get('page')).toBe('1');
+      expect(req.request.params.get('search')).toBe('mouse');
+      req.flush(buildPage([buildProduct()]));
+      await render();
+    });
+
     it('deshabilita Anterior en la primera página y Siguiente en la última', async () => {
       await showTwoPages();
       expect(pageButton('Anterior').disabled).toBe(true);
@@ -120,6 +141,50 @@ describe('ProductList', () => {
       next.flush(buildPage([buildProduct()], { totalCount: 10, totalPages: 1 }));
       await render();
     });
+  });
+
+  it('limita la búsqueda a la misma longitud que acepta la API', () => {
+    expect(element.querySelector('input[type="search"]')?.getAttribute('maxlength')).toBe('100');
+  });
+
+  it('tras un error no vuelve a mostrar datos antiguos al cambiar de filtro', async () => {
+    const select = element.querySelectorAll('select')[0] as HTMLSelectElement;
+    select.value = '2';
+    select.dispatchEvent(new Event('change'));
+    expectProductsRequest().flush({ title: 'Error' }, { status: 500, statusText: 'Server Error' });
+    await render();
+    expect(element.querySelector('.alert.error')).not.toBeNull();
+
+    const checkbox = element.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    const pending = expectProductsRequest();
+    TestBed.tick();
+
+    // Mientras carga: "Cargando…", no la tabla del último resultado correcto (de otros filtros).
+    expect(element.querySelectorAll('tbody tr').length).toBe(0);
+    expect(element.querySelector('.loading')).not.toBeNull();
+    pending.flush(buildPage([lowStockProduct]));
+    await render();
+    expect(element.querySelectorAll('tbody tr').length).toBe(1);
+  });
+
+  it('marca como ocupado el mensaje de lista vacía mientras carga otro filtro', async () => {
+    const checkbox = element.querySelector('input[type="checkbox"]') as HTMLInputElement;
+    checkbox.checked = true;
+    checkbox.dispatchEvent(new Event('change'));
+    expectProductsRequest().flush(buildPage([]));
+    await render();
+    expect(element.querySelector('.empty')?.getAttribute('aria-busy')).toBe('false');
+
+    checkbox.checked = false;
+    checkbox.dispatchEvent(new Event('change'));
+    const pending = expectProductsRequest();
+    TestBed.tick();
+
+    expect(element.querySelector('.empty')?.getAttribute('aria-busy')).toBe('true');
+    pending.flush(buildPage([buildProduct()]));
+    await render();
   });
 
   it('usa el singular cuando solo hay un producto', async () => {

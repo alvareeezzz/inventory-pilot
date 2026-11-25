@@ -88,11 +88,13 @@ describe('ProductsApi · categorías', () => {
     const api = TestBed.inject(ProductsApi);
 
     // El listado y el formulario leen el mismo recurso compartido.
-    const fromList = api.loadCategories();
+    api.loadCategories();
+    const fromList = api.categories;
     TestBed.tick();
     httpMock.expectOne('/api/categories').flush([{ id: 1, name: 'Electronics' }]);
     await TestBed.inject(ApplicationRef).whenStable();
-    const fromForm = api.loadCategories();
+    api.loadCategories();
+    const fromForm = api.categories;
     TestBed.tick();
 
     httpMock.expectNone('/api/categories');

@@ -28,6 +28,8 @@ export const PRODUCT_RULES = {
   skuMaxLength: 32,
   nameMaxLength: 100,
   descriptionMaxLength: 500,
+  /** Búsqueda del listado (ProductQuery.SearchMaxLength en la API). */
+  searchMaxLength: 100,
   minPrice: 0.01,
   maxAmount: 1_000_000,
   /** Letras, números y guiones (se admiten espacios alrededor porque el SKU se recorta). */

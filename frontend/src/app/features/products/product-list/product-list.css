@@ -19,8 +19,9 @@
   border-radius: var(--radius);
 }
 
-/* Mientras llega la página o el filtro nuevo se mantiene la anterior, atenuada. */
-.table-wrapper[aria-busy='true'] {
+/* Mientras llega la página o el filtro nuevo se mantiene la anterior (o el aviso de vacío), atenuada. */
+.table-wrapper[aria-busy='true'],
+.empty[aria-busy='true'] {
   opacity: 0.6;
   transition: opacity 0.15s;
 }

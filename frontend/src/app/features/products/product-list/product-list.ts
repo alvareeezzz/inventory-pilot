@@ -15,7 +15,7 @@ import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-i
 import { Router, RouterLink } from '@angular/router';
 import { debounceTime, distinctUntilChanged, finalize, map } from 'rxjs';
 import { describeHttpError } from '../../../core/http/problem-details';
-import { PagedResponse, Product, ProductFilters, ProductSort } from '../data/product.models';
+import { PRODUCT_RULES, PagedResponse, Product, ProductFilters, ProductSort } from '../data/product.models';
 import { ProductsApi } from '../data/products-api';
 
 const PAGE_SIZE = 10;
@@ -33,6 +33,8 @@ export class ProductList {
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
+  protected readonly searchMaxLength = PRODUCT_RULES.searchMaxLength;
+
   protected readonly productCountLabels = { '=1': '# producto', other: '# productos' };
 
   protected readonly sortOptions: { value: ProductSort; label: string }[] = [
@@ -49,7 +51,6 @@ export class ProductList {
   protected readonly categoryId = signal<number | null>(null);
   protected readonly lowStock = signal(false);
   protected readonly sort = signal<ProductSort>('name');
-  protected readonly page = signal(1);
 
   // La búsqueda espera a que el usuario deje de escribir para no lanzar una petición por tecla.
   private readonly search = toSignal(
@@ -60,6 +61,15 @@ export class ProductList {
     ),
     { initialValue: '' },
   );
+
+  /**
+   * Página actual: vuelve sola a la 1 cuando cambia un filtro. Se usa la búsqueda ya filtrada por el
+   * retardo, así que escribir no lanza una petición intermedia de la página 1 con la búsqueda anterior.
+   */
+  protected readonly page = linkedSignal({
+    source: () => [this.search(), this.categoryId(), this.lowStock(), this.sort()] as const,
+    computation: () => 1,
+  });
 
   private readonly filters = computed<ProductFilters>(() => ({
     page: this.page(),
@@ -77,11 +87,17 @@ export class ProductList {
   /**
    * Último resultado recibido. Al cambiar de página o de filtro el recurso pasa a 'loading' y su
    * valor queda undefined; se sigue mostrando el anterior (marcado como ocupado) para que la tabla
-   * no desaparezca ni salte el contenido mientras llega el nuevo.
+   * no desaparezca ni salte el contenido mientras llega el nuevo. Un error corta esa continuidad
+   * (null): al reintentar se muestra "Cargando…" y no datos de otros filtros.
    */
-  protected readonly result = linkedSignal<PagedResponse<Product> | undefined, PagedResponse<Product> | undefined>({
-    source: () => (this.products.hasValue() ? this.products.value() : undefined),
-    computation: (value, previous) => value ?? previous?.value,
+  protected readonly result = linkedSignal<PagedResponse<Product> | null | undefined, PagedResponse<Product> | undefined>({
+    source: () => {
+      if (this.products.status() === 'error') {
+        return null;
+      }
+      return this.products.hasValue() ? this.products.value() : undefined;
+    },
+    computation: (value, previous) => (value === undefined ? previous?.value : (value ?? undefined)),
   });
 
   protected readonly totalPages = computed(() => this.result()?.totalPages ?? 0);
@@ -116,22 +132,18 @@ export class ProductList {
 
   protected onSearchInput(value: string): void {
     this.searchInput.set(value);
-    this.page.set(1);
   }
 
   protected onCategoryChange(value: string): void {
     this.categoryId.set(value ? Number(value) : null);
-    this.page.set(1);
   }
 
   protected onLowStockChange(checked: boolean): void {
     this.lowStock.set(checked);
-    this.page.set(1);
   }
 
   protected onSortChange(value: string): void {
     this.sort.set(value as ProductSort);
-    this.page.set(1);
   }
 
   protected goToPage(page: number): void {

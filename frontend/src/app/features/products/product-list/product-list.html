@@ -9,6 +9,7 @@
       <span>Buscar</span>
       <input
         type="search"
+        [attr.maxlength]="searchMaxLength"
         placeholder="Nombre o SKU"
         [value]="searchInput()"
         (input)="onSearchInput($any($event.target).value)"
@@ -52,14 +53,19 @@
     }
   </div>
 
+  <!--
+    Se lee result() siempre (también con error): un linkedSignal solo se recalcula al leerse y así
+    registra el error y no vuelve a mostrar datos antiguos al cambiar de filtro.
+  -->
+  @let current = result();
   @if (loadError(); as error) {
     <div class="alert error" role="alert">
       <p>No se han podido cargar los productos: {{ error }}</p>
       <button type="button" class="button" (click)="products.reload()">Reintentar</button>
     </div>
-  } @else if (result(); as result) {
+  } @else if (current; as result) {
     @if (result.items.length === 0) {
-      <p class="empty">No hay productos que coincidan con los filtros.</p>
+      <p class="empty" [attr.aria-busy]="products.isLoading()">No hay productos que coincidan con los filtros.</p>
     } @else {
       <div class="table-wrapper" [attr.aria-busy]="products.isLoading()">
         <!--
